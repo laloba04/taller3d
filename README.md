@@ -98,6 +98,39 @@ Se cargan desde CDN, así que no hace falta instalar nada:
 - Google Fonts: tipografías para los textos
 - [Manifold](https://github.com/elalish/manifold) 3.5.4 (Apache-2.0): operaciones booleanas 3D en WebAssembly. Va incluida en `public/vendor/manifold` porque necesita un archivo `.wasm` del mismo sitio. Para actualizarla: `tools/vendor-manifold.sh <versión>`.
 
+## Cosas a mejorar (reportes de fallos)
+
+Apartado público donde cualquiera puede avisar de un fallo con texto, fotos y (si R2 está activado) vídeos. Los reportes se revisan en `#mejoras-panel`, protegido con contraseña.
+
+- **Servidor:** Cloudflare Pages Functions en `functions/api/mejoras/` (código común en `lib/mejoras.js`).
+- **Datos:** base de datos D1 `taller3d-mejoras` (enlace `DB` en `wrangler.jsonc`, esquema en `db/schema.sql`).
+- **Archivos:** si existe el enlace `MEDIA` (R2), fotos y vídeos van a R2; si no, solo se aceptan fotos (se reducen en el navegador y se guardan en D1).
+- **Anti-spam:** campo trampa oculto y como mucho 5 reportes por hora y conexión (se guarda una huella de la IP, no la IP).
+
+| Ruta | Quién | Qué hace |
+|---|---|---|
+| `POST /api/mejoras` | cualquiera | Envía un reporte (formulario con `texto`, `modelo`, `nombre`, `contacto`, `archivos`) |
+| `GET /api/mejoras?estado=` | panel | Lista reportes y adjuntos |
+| `PATCH /api/mejoras/:id` | panel | Cambia `estado` (pendiente, en_curso, arreglado, descartado) o `nota` |
+| `DELETE /api/mejoras/:id` | panel | Borra el reporte y sus archivos |
+| `GET /api/mejoras/adjunto/:id` | panel | Descarga una foto o vídeo |
+| `GET /api/mejoras/config` | cualquiera | Qué está activado |
+
+### Configuración en Cloudflare
+
+1. **Contraseña del panel:** Workers y Pages → taller3d → Configuración → Variables y secretos → añadir secreto `ADMIN_PASSWORD`. Después, volver a desplegar.
+2. **Vídeos (opcional):** activar R2 en el panel de Cloudflare, crear el bucket `taller3d-mejoras` y añadir en `wrangler.jsonc`:
+   ```jsonc
+   "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "taller3d-mejoras" }]
+   ```
+
+### Probar en local
+
+```bash
+npx wrangler d1 execute taller3d-mejoras --local --file db/schema.sql
+npx wrangler pages dev public --r2 MEDIA --binding ADMIN_PASSWORD=prueba
+```
+
 ## Pruebas
 
 `tests/run_all.py` abre la web en Chrome sin ventana, genera **todos** los modelos con sus valores por defecto dentro del worker, comprueba con Manifold que cada pieza es una malla cerrada, mide si la página se bloquea y prueba la descarga.

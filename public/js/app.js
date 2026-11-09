@@ -63,9 +63,10 @@ function route() {
   const c = CATEGORIES.find(c => c.id === h); if (c) return openCat(c);
   if (h === 'modelos') return openAll(); if (h === 'favoritos') return openFav(); if (h === 'herramientas') return openTools();
   if (h === 'svg') return openSvg(); if (h === 'generador-qr') return openQrTool();
+  if (h === 'mejoras-panel') return Mejoras.panel(); if (h === 'mejoras' || h.startsWith('mejoras-')) return Mejoras.abrir(h.slice(8));
   openHome();
 }
-function setNav(h) { const map = { modelos: 'modelos', favoritos: 'favoritos', herramientas: 'herramientas', svg: 'herramientas', 'generador-qr': 'herramientas', pruebas: 'herramientas' }; const k = map[h] || (h === '' || h === 'inicio' ? 'inicio' : ''); document.querySelectorAll('.mainnav a').forEach(a => a.classList.toggle('on', a.dataset.nav === k)); }
+function setNav(h) { const map = { mejoras: 'mejoras', 'mejoras-panel': 'mejoras', modelos: 'modelos', favoritos: 'favoritos', herramientas: 'herramientas', svg: 'herramientas', 'generador-qr': 'herramientas', pruebas: 'herramientas' }; const k = map[h] || (h.startsWith('mejoras-') ? 'mejoras' : h === '' || h === 'inicio' ? 'inicio' : ''); document.querySelectorAll('.mainnav a').forEach(a => a.classList.toggle('on', a.dataset.nav === k)); }
 function show(id) { for (const v of ['view-home', 'view-cat', 'view-page', 'view-editor']) $('#' + v).classList.toggle('hidden', v !== id); window.scrollTo(0, 0); }
 /* favoritos (solo en este navegador) */
 function favs() { try { return new Set(JSON.parse(localStorage.getItem('t3d-fav') || '[]')); } catch (e) { return new Set(); } }
@@ -248,7 +249,7 @@ function openModel(id) {
   const m = MODELS[id]; state.model = m; show('view-editor');
   const c = state.cat && state.cat.models.includes(id) ? state.cat : CATEGORIES.find(c => c.models.includes(id));
   crumbs([{ label: 'Inicio', href: '#inicio' }, { label: c.name, href: '#' + c.id }, { label: m.name }]);
-  $('#m-title').textContent = m.name; $('#m-desc').textContent = m.desc; $('#dl-msg').textContent = '';
+  $('#m-title').textContent = m.name; $('#m-desc').textContent = m.desc; $('#dl-msg').textContent = ''; $('#m-fallo').href = '#mejoras-' + id;
   thumbQ = []; initViewer(); if (!raf) loop(); state.refit = true; resize(); buildForm(m); regenerate();
 }
 
@@ -265,6 +266,7 @@ async function nextThumb() {
 function makeThumb(m) { return Engine.thumb(m, defaults(m)); }
 
 $('#btn-dl').addEventListener('click', download);
+window.T3DUI = { el, page, crumbs };
 renderCats(); window.addEventListener('hashchange', route); route();
 window.__T3D = { Engine, MODELS, defaults, makeThumb, vals };
 })();
