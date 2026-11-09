@@ -53,7 +53,7 @@ async function abrir(modeloId) {
   form.addEventListener('submit', async (e) => {
     e.preventDefault(); if (texto.value.trim().length < 5) { msg.textContent = 'Cuéntanos un poco más qué pasa.'; texto.focus(); return; }
     btn.disabled = true; msg.textContent = 'Preparando…';
-    const fd = new FormData(); fd.append('modelo', modelo.value); fd.append('texto', texto.value); fd.append('nombre', nombre.value); fd.append('contacto', contacto.value); fd.append('web', trampa.value);
+    const fd = new FormData(); fd.append('modelo', modelo.value); fd.append('modeloNombre', modelo.value ? modelo.selectedOptions[0].textContent : ''); fd.append('texto', texto.value); fd.append('nombre', nombre.value); fd.append('contacto', contacto.value); fd.append('web', trampa.value);
     for (const fl of elegidos) fd.append('archivos', await reducir(fl));
     barra.classList.remove('hidden'); msg.textContent = 'Enviando…';
     /* XMLHttpRequest para ver el progreso de subida (los vídeos tardan) */
@@ -99,9 +99,20 @@ async function panel(filtro = 'pendiente') {
     tabs.append(el('button', { class: 'chip' + (k === filtro ? ' on' : ''), onclick: () => panel(k) }, `${l} (${n})`));
   }
   tabs.append(el('button', { class: 'chip', onclick: () => { guardarClave(''); panel(filtro); } }, 'Salir'));
-  box.append(tabs);
+  box.append(tabs, avisos());
   if (!data.reportes.length) { box.append(el('p', { class: 'muted' }, 'No hay nada aquí. 🎉')); return; }
   for (const r of data.reportes) box.append(tarjeta(r, filtro));
+}
+/* avisos por Telegram: estado y botón para conectar */
+function avisos() {
+  const c = el('div', { class: 'mej-tg muted small' }, 'Avisos por Telegram: comprobando…');
+  const pintar = (st) => { c.innerHTML = '';
+    if (!st.token) { c.append('📵 Avisos por Telegram desactivados. Crea un bot con @BotFather y pon su token como secreto TELEGRAM_TOKEN en Cloudflare (ver README).'); return; }
+    if (st.chat) { c.append('🔔 Avisos por Telegram a ', el('b', {}, st.chat.nombre), ' ', el('button', { class: 'chip', onclick: () => conectar() }, 'Probar / reconectar'), ' ', el('button', { class: 'chip', onclick: async () => { await api('/telegram', { method: 'DELETE' }); cargar(); } }, 'Desconectar')); return; }
+    c.append('🔕 Telegram sin conectar. Abre tu bot, escríbele /start y pulsa ', el('button', { class: 'chip', onclick: () => conectar() }, 'Conectar Telegram')); };
+  const cargar = () => api('/telegram').then(r => r.json()).then(pintar).catch(e => { c.textContent = e.message; });
+  const conectar = async () => { c.textContent = 'Conectando…'; try { await api('/telegram', { method: 'POST' }); cargar(); } catch (e) { c.textContent = e.message + ' '; c.append(el('button', { class: 'chip', onclick: () => cargar() }, 'Volver')); } };
+  cargar(); return c;
 }
 function tarjeta(r, filtro) {
   const m = r.modelo && CAT.MODELS[r.modelo];
@@ -110,6 +121,13 @@ function tarjeta(r, filtro) {
   const ok = el('span', { class: 'muted small' });
   const guardar = async (body) => { ok.textContent = 'Guardando…'; try { await api('/' + r.id, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }); ok.textContent = 'Guardado'; if (body.estado && filtro !== 'todos') setTimeout(() => panel(filtro), 400); } catch (e) { ok.textContent = e.message; } };
   estado.addEventListener('change', () => guardar({ estado: estado.value }));
+  /* borrar con confirmación dentro de la tarjeta (sin ventanas del navegador) */
+  const borrar = el('span', {}); const pintarBorrar = (pregunta) => { borrar.innerHTML = '';
+    if (!pregunta) return borrar.append(el('button', { class: 'chip', onclick: () => pintarBorrar(true) }, 'Borrar'));
+    borrar.append(el('span', { class: 'mej-seguro' }, '¿Borrar este reporte y sus archivos? '),
+      el('button', { class: 'chip peligro', onclick: async () => { try { await api('/' + r.id, { method: 'DELETE' }); panel(filtro); } catch (e) { ok.textContent = e.message; } } }, 'Sí, borrar'), ' ',
+      el('button', { class: 'chip', onclick: () => pintarBorrar(false) }, 'No')); };
+  pintarBorrar(false);
   const media = el('div', { class: 'mej-media' });
   for (const a of r.adjuntos) {
     const ph = el('div', { class: 'mej-ph' }, a.tipo === 'video' ? '🎬' : '📷'); media.append(ph);
@@ -125,9 +143,8 @@ function tarjeta(r, filtro) {
     r.adjuntos.length ? media : '',
     el('div', { class: 'mej-acc' }, estado, nota,
       el('button', { class: 'chip', onclick: () => guardar({ nota: nota.value }) }, 'Guardar nota'),
-      el('button', { class: 'chip', onclick: async () => { if (!confirmar(r)) return; try { await api('/' + r.id, { method: 'DELETE' }); panel(filtro); } catch (e) { ok.textContent = e.message; } } }, 'Borrar'), ok));
+      borrar, ok));
 }
-function confirmar(r) { return window.confirm(`¿Borrar el reporte #${r.id} y sus archivos?`); }
 
 return { abrir, panel };
 })();

@@ -23,3 +23,4 @@ CREATE TABLE IF NOT EXISTS adjuntos (
 CREATE INDEX IF NOT EXISTS idx_rep_estado ON reportes(estado, creado);
 CREATE INDEX IF NOT EXISTS idx_rep_ip ON reportes(ip_hash, creado);
 CREATE INDEX IF NOT EXISTS idx_adj_rep ON adjuntos(reporte_id);
+CREATE TABLE IF NOT EXISTS ajustes (clave TEXT PRIMARY KEY, valor TEXT);   -- p. ej. telegram_chat

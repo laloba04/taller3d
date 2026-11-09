@@ -115,6 +115,7 @@ Apartado público donde cualquiera puede avisar de un fallo con texto, fotos y (
 | `DELETE /api/mejoras/:id` | panel | Borra el reporte y sus archivos |
 | `GET /api/mejoras/adjunto/:id` | panel | Descarga una foto o vídeo |
 | `GET /api/mejoras/config` | cualquiera | Qué está activado |
+| `GET/POST/DELETE /api/mejoras/telegram` | panel | Estado, conectar (y mensaje de prueba) o desconectar Telegram |
 
 ### Configuración en Cloudflare
 
@@ -123,6 +124,8 @@ Apartado público donde cualquiera puede avisar de un fallo con texto, fotos y (
    ```jsonc
    "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "taller3d-mejoras" }]
    ```
+
+3. **Avisos por Telegram:** crear un bot con @BotFather, añadir su token como secreto `TELEGRAM_TOKEN` (igual que `ADMIN_PASSWORD`) y volver a desplegar. Luego escribir `/start` al bot y pulsar **Conectar Telegram** en el panel: el chat se guarda en la tabla `ajustes`. Con cada reporte llega un mensaje con el texto, el contacto y el enlace al panel, más las fotos y vídeos (hasta 50 MB).
 
 ### Probar en local
 

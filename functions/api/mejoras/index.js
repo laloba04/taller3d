@@ -1,8 +1,8 @@
 /* POST /api/mejoras  → enviar un reporte (público, con filtro anti-spam)
    GET  /api/mejoras  → listar reportes (solo administradora) */
-import { LIM, ESTADOS, json, guard, ipHash, corta } from '../../../lib/mejoras.js';
+import { LIM, ESTADOS, json, guard, ipHash, corta, avisar } from '../../../lib/mejoras.js';
 
-export async function onRequestPost({ request, env }) {
+export async function onRequestPost({ request, env, waitUntil }) {
   if (!env.DB) return json({ error: 'La base de datos no está enlazada.' }, 503);
   let fd; try { fd = await request.formData(); } catch (e) { return json({ error: 'Formulario no válido.' }, 400); }
   if (corta(fd.get('web'))) return json({ ok: true });                       /* campo trampa: los bots lo rellenan */
@@ -21,9 +21,10 @@ export async function onRequestPost({ request, env }) {
   const { n } = await env.DB.prepare("SELECT COUNT(*) AS n FROM reportes WHERE ip_hash = ? AND creado > datetime('now', '-1 hour')").bind(ih).first();
   if (n >= LIM.porHora) return json({ error: 'Has enviado muchos reportes seguidos. Prueba dentro de un rato.' }, 429);
 
+  const rep = { modelo: corta(fd.get('modelo')) || null, nombre: corta(fd.get('nombre')) || null, contacto: corta(fd.get('contacto')) || null, texto };
   const r = await env.DB.prepare('INSERT INTO reportes (modelo, nombre, contacto, texto, ip_hash) VALUES (?, ?, ?, ?, ?)')
-    .bind(corta(fd.get('modelo')) || null, corta(fd.get('nombre')) || null, corta(fd.get('contacto')) || null, texto, ih).run();
-  const id = r.meta.last_row_id;
+    .bind(rep.modelo, rep.nombre, rep.contacto, texto, ih).run();
+  const id = r.meta.last_row_id; rep.id = id; rep.modeloNombre = corta(fd.get('modeloNombre')) || rep.modelo;
   for (const f of files) {
     const tipo = f.type.startsWith('video/') ? 'video' : 'imagen';
     if (env.MEDIA) {
@@ -34,6 +35,8 @@ export async function onRequestPost({ request, env }) {
       await env.DB.prepare('INSERT INTO adjuntos (reporte_id, tipo, nombre, tam, datos, mime) VALUES (?, ?, ?, ?, ?, ?)').bind(id, tipo, corta(f.name), f.size, await f.arrayBuffer(), f.type).run();
     }
   }
+  /* aviso por Telegram en segundo plano (no retrasa la respuesta) */
+  waitUntil(avisar(env, rep, files, new URL(request.url).origin + '/#mejoras-panel'));
   return json({ ok: true, id });
 }
 
