@@ -2,8 +2,11 @@
   "name": "taller3d",
   "pages_build_output_dir": "./public",
   "compatibility_date": "2026-11-01",
-  // "Cosas a mejorar": reportes en D1. Las fotos y vídeos irán a R2 cuando se active (ver README).
+  // "Cosas a mejorar": reportes en D1; fotos y vídeos en R2
   "d1_databases": [
     { "binding": "DB", "database_name": "taller3d-mejoras", "database_id": "a4a77d9b-63b1-4be6-a24c-36f51a9d92f1" }
+  ],
+  "r2_buckets": [
+    { "binding": "MEDIA", "bucket_name": "taller3d-mejoras" }
   ]
 }

@@ -119,7 +119,7 @@ Apartado público donde cualquiera puede avisar de un fallo con texto, fotos y (
 ### Configuración en Cloudflare
 
 1. **Contraseña del panel:** Workers y Pages → taller3d → Configuración → Variables y secretos → añadir secreto `ADMIN_PASSWORD`. Después, volver a desplegar.
-2. **Vídeos (opcional):** activar R2 en el panel de Cloudflare, crear el bucket `taller3d-mejoras` y añadir en `wrangler.jsonc`:
+2. **Vídeos:** R2 ya está activado, con el bucket `taller3d-mejoras` enlazado en `wrangler.jsonc` así:
    ```jsonc
    "r2_buckets": [{ "binding": "MEDIA", "bucket_name": "taller3d-mejoras" }]
    ```
