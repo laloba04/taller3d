@@ -876,7 +876,7 @@ function gCarrete(p) {
 /* ===================== ampliación: abrelatas, rattan, llavero de imagen, rosa con nombre… ===================== */
 /* cabeza decorativa reutilizable: devuelve { base, capas:[{name,mask,dz,color}] } centrada en (0,cy) */
 function cabeza(F, p, cy, size) {
-  const f = font(p.fuente); const capas = []; let sil;
+  const f = font(p.fuente); const capas = []; let sil, agujero = null;
   switch (p.cabeza) {
     case 'imagen': { const s = imgFit(p.img, size, size); const I = F.image(p.img, 0, cy, s.w, s.h, { thr: p.umbral }); sil = fillHoles(F, close(F, I, 1.5));
       const Lu = F.lum(p.img, 0, cy, s.w, s.h); const dark = new Uint8Array(F.n); for (let i = 0; i < F.n; i++) if (sil[i] && Lu[i] >= 0 && Lu[i] < 0.35) dark[i] = 1;
@@ -886,49 +886,60 @@ function cabeza(F, p, cy, size) {
     case 'flor': { sil = F.shape('flor', 0, cy, size, size); capas.push({ name: 'Pétalos', mask: sub(sil, F.disk(0, cy, size * 0.2)), dz: 0.6, color: p.color2 || C.lila }, { name: 'Centro', mask: F.disk(0, cy, size * 0.18), dz: 1.2, color: C.oro });
       const pet = F.draw(c => { c.lineWidth = 0.7; for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4 + Math.PI / 8; c.beginPath(); c.moveTo(Math.cos(a) * size * 0.22, cy + Math.sin(a) * size * 0.22); c.lineTo(Math.cos(a) * size * 0.46, cy + Math.sin(a) * size * 0.46); c.stroke(); } });
       capas[0].mask = sub(capas[0].mask, pet); break; }
-    case 'lazo_rosa': { const z = cinta(F, cy, size); sil = z.sil; capas.push({ name: 'Lazo', mask: z.lazo, dz: 0.8, color: p.color2 || C.rosa }); break; }
+    case 'lazo_rosa': { const z = cinta(F, cy, size); sil = z.sil; agujero = z.agujero; capas.push({ name: 'Lazo', mask: z.lazo, dz: 0.8, color: p.color2 || C.rosa }); break; }
     case 'esmalte': { sil = F.shape('esmalte', 0, cy, size * 0.62, size); const ic = p.texto ? p.texto : '♥'; const s = fitSize([ic], f, size * 0.42, size * 0.32); capas.push({ name: 'Bote', mask: sub(sil, F.rect(-size, cy - size, size, cy - size * 0.08)), dz: 0.6, color: p.color2 || C.rosa }, { name: 'Tapón', mask: and(sil, F.rect(-size, cy - size, size, cy - size * 0.1)), dz: 0.6, color: C.negro }, { name: 'Icono', mask: and(F.text([ic], f, s, 0, cy + size * 0.2), erode(F, sil, 1.6)), dz: 1.2, color: C.blanco }); break; }
     default: { sil = F.shape(p.cabeza, 0, cy, size, size); capas.push({ name: 'Figura', mask: sil, dz: 0.8, color: p.color2 || C.rosa }); if (p.texto) { const t = lines(p.texto, ''); const fit = FIT[p.cabeza] || [.6, .45]; const s = fitSize(t, f, size * fit[0], size * fit[1]); capas.push({ name: 'Texto', mask: and(F.text(t, f, s, 0, cy + size * (fit[3] || 0)), erode(F, sil, 1.2)), dz: 1.4, color: C.blanco }); } }
   }
-  return { sil, capas };
+  return { sil, capas, agujero };
 }
 /* lazo solidario como cinta: bucle abierto, dos tiras cruzadas (la que baja hacia la derecha va por encima) y colas en uve.
    Centrado en (0,cy); size = alto total. Devuelve la silueta y el lazo con la línea de separación en el cruce. */
 function cinta(F, cy, size) {
-  const k = size / 112, bw = 15;   /* unidades de diseño: 112 de alto, cinta de 15 de ancho */
+  const k = size / 116, bw = 21;   /* unidades de diseño: 116 de alto, cinta de 21 de ancho */
   const P = (x, y) => [x * k, cy + y * k];
-  const tiraA = c => { c.moveTo(...P(-31, 54)); c.lineTo(...P(13, -8)); c.bezierCurveTo(...P(28, -29), ...P(25, -54), ...P(0, -54)); };
-  const tiraB = c => { c.moveTo(...P(0, -54)); c.bezierCurveTo(...P(-25, -54), ...P(-28, -29), ...P(-13, -8)); c.lineTo(...P(31, 54)); };
+  const tiraA = c => { c.moveTo(...P(-33, 54)); c.lineTo(...P(11, -4)); c.bezierCurveTo(...P(37, -30), ...P(31, -56), ...P(0, -56)); };
+  const tiraB = c => { c.moveTo(...P(0, -56)); c.bezierCurveTo(...P(-31, -56), ...P(-37, -30), ...P(-11, -4)); c.lineTo(...P(33, 54)); };
   const trazo = (fn) => F.draw(c => { c.lineWidth = bw * k; c.lineCap = 'butt'; c.lineJoin = 'round'; c.beginPath(); fn(c); c.stroke(); });
   /* colas en uve: muesca triangular en cada extremo */
-  const uve = F.draw(c => { for (const [ex, ey, fx, fy] of [[-31, 54, 13, -8], [31, 54, -13, -8]]) {
+  const uve = F.draw(c => { for (const [ex, ey, fx, fy] of [[-33, 54, 11, -4], [33, 54, -11, -4]]) {
     const L = Math.hypot(ex - fx, ey - fy), dx = (ex - fx) / L, dy = (ey - fy) / L, nx = -dy, ny = dx, h = bw * 0.62;
-    c.beginPath(); c.moveTo(...P(ex + nx * h + dx * 2, ey + ny * h + dy * 2)); c.lineTo(...P(ex - dx * 7.5, ey - dy * 7.5)); c.lineTo(...P(ex - nx * h + dx * 2, ey - ny * h + dy * 2)); c.closePath(); c.fill(); } });
+    c.beginPath(); c.moveTo(...P(ex + nx * h + dx * 2, ey + ny * h + dy * 2)); c.lineTo(...P(ex - dx * 9, ey - dy * 9)); c.lineTo(...P(ex - nx * h + dx * 2, ey - ny * h + dy * 2)); c.closePath(); c.fill(); } });
   const A = sub(trazo(tiraA), uve), B = sub(trazo(tiraB), uve);
   /* la separación solo en el cruce: el tramo recto de la tira de encima */
-  const recto = sub(trazo(c => { c.moveTo(...P(-13, -8)); c.lineTo(...P(31, 54)); }), uve);
+  const recto = sub(trazo(c => { c.moveTo(...P(-11, -4)); c.lineTo(...P(33, 54)); }), uve);
   const lazo = or(sub(A, dilate(F, recto, 0.6)), B);
-  return { sil: or(A, B), lazo };
+  /* sitio para la anilla: en mitad de la tira izquierda del bucle */
+  return { sil: or(A, B), lazo, agujero: P(-26, -38) };
 }
 function gAbrelatas2(p) {
   const size = p.tam, aR = p.anchoR || 16, Wb = aR + 4.4, Lb = (p.fondoR || 16) + 6; const F = frame(Math.max(size + 2 * p.borde, Wb) + 16, size + Lb + 2 * p.borde + 20);
-  const arriba = p.posR === 'arriba';
-  const cy = arriba ? 0 : -Lb / 2 - 2; const hd = cabeza(F, p, cy, size); const outline = K.fillHoles(F, close(F, dilate(F, hd.sil, p.borde), 2));
-  let base, yB, dir;
-  if (arriba) {
-    /* bloque escondido detrás de la figura; solo asoma la boca de la ranura por arriba */
-    const et = extreme(F, outline, 'top'); yB = et[1] - 0.6; dir = -1;
-    base = close(F, or(outline, F.draw(c => { c.beginPath(); K.roundRect(c, -Wb / 2, yB, Wb, Lb, 5); c.fill(); })), 1.5);
-  } else {
-    const eb = extreme(F, outline, 'bottom'); dir = eb[1] < cy ? -1 : 1; yB = eb[1] + dir * (p.fondoR || 16);
-    const yA = cy; base = close(F, or(outline, F.draw(c => { c.beginPath(); K.roundRect(c, -Wb / 2, Math.min(yA, yB), Wb, Math.abs(yB - yA), 2.5); c.fill(); })), 1.5);
-  }
-  const bb0 = bbox(F, outline); const h = arriba ? holeTab(F, base, 'izq', 4, bb0.y0, bb0.y0 + bb0.bh * 0.4) : holeTab(F, base, 'arriba', 4); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
+  /* ranura arriba (escondida detrás de la figura) o abajo (en una lengüeta) */
+  const plan = (arriba) => {
+    const cy = arriba ? 0 : -Lb / 2 - 2; const hd = cabeza(F, p, cy, size); const outline = K.fillHoles(F, close(F, dilate(F, hd.sil, p.borde), 2));
+    if (arriba) {
+      /* la ranura entra directamente por el borde de arriba: la silueta no cambia */
+      const et = extreme(F, outline, 'top'); const yB = et[1];
+      const block = F.draw(c => { c.beginPath(); K.roundRect(c, -Wb / 2, yB, Wb, Lb, 1); c.fill(); });
+      /* zona que necesita la ranura y que no es figura: si es mucha, la figura es estrecha por arriba */
+      const fuera = K.count(sub(block, outline)) / Math.max(1, K.count(block));
+      return { cy, hd, outline, yB, dir: -1, base: outline, fuera };
+    }
+    const eb = extreme(F, outline, 'bottom'); const dir = eb[1] < cy ? -1 : 1; const yB = eb[1] + dir * (p.fondoR || 16);
+    return { cy, hd, outline, yB, dir, base: close(F, or(outline, F.draw(c => { c.beginPath(); K.roundRect(c, -Wb / 2, Math.min(cy, yB), Wb, Math.abs(yB - cy), 2.5); c.fill(); })), 1.5) };
+  };
+  let arriba = p.posR === 'arriba', aviso = '';
+  let pl = plan(arriba);
+  if (arriba && pl.fuera > 0.25) { arriba = false; pl = plan(false); aviso = ' Esta figura es estrecha por arriba y la ranura no cabe escondida detrás: se ha puesto abajo.'; }
+  const { cy, hd, outline, yB, dir } = pl; let base = pl.base;
+  const bb0 = bbox(F, outline);
+  /* anilla: dentro de la figura si tiene sitio (lazo), si no en una pestaña */
+  const h = arriba && hd.agujero ? { base: sub(base, F.disk(hd.agujero[0], hd.agujero[1], 2)), clear: F.disk(hd.agujero[0], hd.agujero[1], 2.3) }
+    : arriba ? holeTab(F, base, 'izq', 4, bb0.y0, bb0.y0 + bb0.bh * 0.4) : holeTab(F, base, 'arriba', 4); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
   if (p.circR) base = sub(base, F.disk(0, yB, aR * 0.28)); const yP = yB - dir * p.fondoR; const pocket = F.rect(-aR / 2, Math.min(yP, yB + dir * 3), aR / 2, Math.max(yP, yB + dir * 3), 0.8);
   const ab = abreCapas(F, base, pocket, p, p.color1 || C.blanco, p.nfc ? F.disk(0, cy, p.dNfc / 2 + 0.3) : null); const g = ab.T; const layers = ab.layers;
   const first = new Set(['Imagen', 'Pétalos', 'Bote', 'Figura', 'Tapón', 'Lazo']); const top = Math.max(...hd.capas.filter(cp => first.has(cp.name)).map(cp => cp.dz), 0);
   for (const cp of hd.capas) { const m = cl(and(cp.mask, erode(F, outline, 0.4))); if (!K.count(m)) continue; if (first.has(cp.name)) layers.push(L(cp.name, m, g, g + cp.dz, cp.color)); else layers.push(L(cp.name, m, g + top, g + top + cp.dz * 0.6, cp.color)); }
-  return { F, layers, note: NOTA_ABRE + ab.nota };
+  return { F, layers, note: NOTA_ABRE + ab.nota + aviso };
 }
 /* rattan */
 function rattanPiece(F, M, p) { const fr = ring(F, M, p.marco); const inner = erode(F, M, p.marco - 0.6); const rt = and(F.pattern('rattan', p.paso, 1, 1), inner); return { fr, rt }; }
