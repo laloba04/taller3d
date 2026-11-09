@@ -671,14 +671,19 @@ function gOrganizador(p) {
 
 /* termoformado: molde macho (cúpula + diseño) y hembra en espejo con holgura para la lámina */
 function gTermo(p) {
-  const W = p.tam, Hs = (p.forma === 'cuadrado' || p.forma === 'circulo' || p.forma === 'flor') ? W : W * (p.forma === 'ovalo' ? 0.7 : 1);
+  /* con diseño de imagen, la forma puede ser la silueta de la propia imagen (más un margen) */
+  const sigue = p.diseno === 'imagen' && p.formaImg !== false && p.imgD, mg = p.margenImg || 6;
+  const si = sigue ? imgFit(p.imgD, p.tam, p.tam) : null;
+  const W = sigue ? si.w + 2 * mg : p.tam, Hs = sigue ? si.h + 2 * mg : (p.forma === 'cuadrado' || p.forma === 'circulo' || p.forma === 'flor') ? W : W * (p.forma === 'ovalo' ? 0.7 : 1);
+  const silueta = (G) => { const im = G.image(p.imgD, 0, 0, si.w, si.h, { thr: p.umbral }); return { im, S: dilate(G, K.fillHoles(G, close(G, im, 1.5)), mg) }; };
   const t = p.eva, H = p.alto, R = Math.max(1, p.redondeo), E = p.relieveD, sign = p.estilo === 'hundido' ? -1 : 1;
   const F = frame(W + 2 * t + 4, Hs + 2 * t + 4, { margin: p.guias ? 13 : 5, maxPx: Math.min(340, K.QUALITY.maxPx), res: Math.min(4, K.QUALITY.res) });
   let S;
-  if (p.forma === 'imagen') { const s = imgFit(p.img, W, Hs); S = fillHoles(F, close(F, F.image(p.img, 0, 0, s.w, s.h, { thr: p.umbral }), 2)); }
+  if (sigue) S = silueta(F).S;
   else S = F.shape(p.forma, 0, 0, W, Hs);
   const fit = FIT[p.forma] || [.6, .45]; let D = F.blank();
-  if (p.diseno === 'texto') { const f = font(p.fuente); const tx = lines(p.texto, 'Feliz Navidad'); const s = fitSize(tx, f, W * fit[0], Hs * fit[1] * 1.3, 1.05); D = F.text(tx, f, s, W * (fit[2] || 0), Hs * (fit[3] || 0), { lh: 1.05 }); }
+  if (sigue) D = silueta(F).im;
+  else if (p.diseno === 'texto') { const f = font(p.fuente); const tx = lines(p.texto, 'Feliz Navidad'); const s = fitSize(tx, f, W * fit[0], Hs * fit[1] * 1.3, 1.05); D = F.text(tx, f, s, W * (fit[2] || 0), Hs * (fit[3] || 0), { lh: 1.05 }); }
   else if (p.diseno === 'imagen') { const s = imgFit(p.imgD, W * fit[0], Hs * fit[1] * 1.4); D = F.image(p.imgD, W * (fit[2] || 0), Hs * (fit[3] || 0), s.w, s.h, { thr: p.umbral }); }
   else if (p.diseno === 'copo') D = K.snowflake(F, W * (fit[2] || 0), Hs * (fit[3] || 0), Math.min(W * fit[0], Hs * fit[1] * 1.4) * 0.5, 1.8, p.semilla);
   else if (p.diseno === 'patron') D = F.pattern(p.patron, p.sep, 1.4, p.semilla);
@@ -706,9 +711,11 @@ function gTermo(p) {
   }
   if (p.malla) {
     const extra = tray ? H / Math.sin((p.angulo || 70) * Math.PI / 180) + 3 : H * 1.25 + 3; const G = frame(W + 2 * extra + 6, Hs + 2 * extra + 6, { margin: 4, maxPx: Math.min(900, K.QUALITY.maxPx), res: Math.min(4, K.QUALITY.res) });
-    let S2 = p.forma === 'imagen' ? null : G.shape(p.forma, 0, 0, W, Hs); let flat = K.close(G, dilate(G, S2, extra), Math.min(6, extra));
+    const sg = sigue ? silueta(G) : null;
+    let S2 = sigue ? sg.S : G.shape(p.forma, 0, 0, W, Hs); let flat = K.close(G, dilate(G, S2, extra), Math.min(6, extra));
     let D2 = G.blank(); const ff = FIT[p.forma] || [.6, .45];
-    if (p.diseno === 'texto') { const f = font(p.fuente); const tx = lines(p.texto, 'Feliz Navidad'); const sz = fitSize(tx, f, W * ff[0], Hs * ff[1] * 1.3, 1.05); D2 = G.text(tx, f, sz, W * (ff[2] || 0), Hs * (ff[3] || 0), { lh: 1.05, bold: 0.5 }); }
+    if (sigue) D2 = dilate(G, sg.im, 0.3);
+    else if (p.diseno === 'texto') { const f = font(p.fuente); const tx = lines(p.texto, 'Feliz Navidad'); const sz = fitSize(tx, f, W * ff[0], Hs * ff[1] * 1.3, 1.05); D2 = G.text(tx, f, sz, W * (ff[2] || 0), Hs * (ff[3] || 0), { lh: 1.05, bold: 0.5 }); }
     else if (p.diseno === 'imagen') { const sz = imgFit(p.imgD, W * ff[0], Hs * ff[1] * 1.4); D2 = dilate(G, G.image(p.imgD, W * (ff[2] || 0), Hs * (ff[3] || 0), sz.w, sz.h, { thr: p.umbral }), 0.3); }
     else if (p.diseno === 'copo') D2 = K.snowflake(G, W * (ff[2] || 0), Hs * (ff[3] || 0), Math.min(W * ff[0], Hs * ff[1] * 1.4) * 0.5, 2.2, p.semilla);
     D2 = and(D2, erode(G, flat, p.bordeMalla + 1));
@@ -1243,10 +1250,11 @@ M('portaboli', 'Porta-bolígrafos de rejilla', 'Huecos cuadrados para rotuladore
 M('organizador-hex', 'Organizador de panal', 'Celdas hexagonales.', [cnt('cols', 'Columnas', 4, 1, 10), cnt('filas', 'Filas', 3, 1, 10), num('celda', 'Celda', 30, 12, 60), num('alto', 'Alto', 70, 20, 150), num('pared', 'Pared', 1.8, 1, 4, 0.2), num('suelo', 'Suelo', 2, 1, 5, 0.2), sel('tipo', 'Tipo', 'hex', { rect: 'Cuadrado', hex: 'Panal' })], p => gOrganizador(p));
 
 
-const TERMO = (o = {}) => [shp(o.forma || 'corazon', ['corazon', 'circulo', 'cuadrado', 'ovalo', 'estrella', 'flor', 'lazo', 'nube', 'hexagono', 'bola', 'arbol', 'galleta', 'casa', 'campana']), sel('perfil', 'Perfil', o.perfil || 'cupula', { cupula: 'Cúpula acolchada', bandeja: 'Bandeja (cajita)' }), num('angulo', 'Inclinación de pared', 70, 45, 85, 1, { unit: '°', show: p => p.perfil === 'bandeja' }),
+const TERMO = (o = {}) => [{ ...shp(o.forma || 'corazon', ['corazon', 'circulo', 'cuadrado', 'ovalo', 'estrella', 'flor', 'lazo', 'nube', 'hexagono', 'bola', 'arbol', 'galleta', 'casa', 'campana']), show: p => !(p.diseno === 'imagen' && p.formaImg) }, sel('perfil', 'Perfil', o.perfil || 'cupula', { cupula: 'Cúpula acolchada', bandeja: 'Bandeja (cajita)' }), num('angulo', 'Inclinación de pared', 70, 45, 85, 1, { unit: '°', show: p => p.perfil === 'bandeja' }),
   num('tam', 'Tamaño', o.tam || 70, 30, 150), sel('diseno', 'Diseño', o.diseno || 'texto', { texto: 'Texto', imagen: 'Imagen', copo: 'Copo de nieve', patron: 'Patrón', ninguno: 'Liso' }),
   area('texto', 'Texto', o.texto ?? 'Feliz\nNavidad', { show: p => p.diseno === 'texto' }), fnt('fuente', 'Fuente', o.fuente || 'pacifico', { show: p => p.diseno === 'texto' }),
   img('imgD', 'Imagen del diseño', 'silueta', { show: p => p.diseno === 'imagen' }), { ...UMB, show: p => p.diseno === 'imagen' },
+  chk('formaImg', 'La forma sigue la silueta de la imagen', true, { show: p => p.diseno === 'imagen' }), num('margenImg', 'Margen alrededor de la imagen', 6, 2, 15, 0.5, { show: p => p.diseno === 'imagen' && p.formaImg }),
   { ...pat('rombos', 'patron', 'Patrón'), show: p => p.diseno === 'patron' }, num('sep', 'Separación del patrón', 6, 3, 15, 0.5, { show: p => p.diseno === 'patron' }), cnt('semilla', 'Variante', 3, 1, 50, { show: p => p.diseno === 'copo' || p.diseno === 'patron' }),
   sel('estilo', 'Diseño en el molde', 'relieve', { relieve: 'En relieve', hundido: 'Hundido' }),
   num('alto', 'Altura', o.alto || 8, 2, 40), num('redondeo', 'Redondeo del borde', 7, 1, 25, 0.5, { show: p => p.perfil !== 'bandeja' }), num('relieveD', 'Profundidad del diseño', 1.2, 0.4, 3, 0.1),
