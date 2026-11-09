@@ -15,7 +15,7 @@ const chk = (k, label, def, o = {}) => ({ k, label, type: 'chk', def, ...o });
 const img = (k, label, demo = 'dibujo', o = {}) => ({ k, label, type: 'img', demo, ...o });
 const shp = (def, list, k = 'forma', label = 'Forma') => sel(k, label, def, Object.fromEntries(list.map(s => [s, K.SHAPES[s]])));
 const pat = (def, k = 'patron', label = 'Patrón') => sel(k, label, def, K.PATTERNS);
-const HOLE = (def = 'arriba') => [sel('agujero', 'Anilla', def, { arriba: 'Arriba', izq: 'Izquierda', der: 'Derecha', no: 'Sin anilla' }), num('dAg', 'Ø agujero', 4.5, 3, 8, 0.5, { show: p => p.agujero !== 'no' })];
+const HOLE = (def = 'arriba') => [sel('agujero', 'Anilla', def, { arriba: 'Arriba', izq: 'Izquierda', der: 'Derecha', abajo: 'Abajo', no: 'Sin anilla' }), num('dAg', 'Ø agujero', 4.5, 3, 8, 0.5, { show: p => p.agujero !== 'no' }), num('movAg', 'Mover anilla', 0, -100, 100, 5, { unit: '%', show: p => p.agujero !== 'no' })];
 const STAND = (def = true) => chk('peana', 'Incluir peana (soporte con ranura)', def);
 
 /* ---------- utilidades ---------- */
@@ -24,15 +24,22 @@ const L = (name, mask, z0, z1, color) => ({ name, mask, z0, z1, color });
 const LM = (name, mesh, color) => ({ name, mesh, color });
 function tdim(t, f, width, lh) { const m = measure(t, f, lh); const s = width / m.w; return { s, w: width, h: m.h * s }; }
 function imgFit(im, maxW, maxH) { const r = (im.width || 1) / (im.height || 1); let w = maxW, h = maxW / r; if (h > maxH) { h = maxH; w = maxH * r; } return { w, h }; }
-function holeTab(F, base, pos, d, ya, yb) {
+/* anilla en una pestaña por fuera del borde: el agujero no recorta la figura.
+   pos: arriba | izq | der | abajo | no; ya,yb: franja vertical donde buscar el borde (izq/der); mov: -100..100 % a lo largo del borde */
+function holeTab(F, base, pos, d, ya, yb, mov = 0) {
   if (!pos || pos === 'no') return { base, hole: null, clear: null };
-  const r = d / 2, R = r + 2.4; let c;
-  if (pos === 'izq') { const e = extreme(F, base, 'left', ya, yb); c = [e[0] - r * 0.25, e[1]]; }
-  else if (pos === 'der') { const e = extreme(F, base, 'right', ya, yb); c = [e[0] + r * 0.25, e[1]]; }
-  else { const bb = bbox(F, base); const s = bb.bw; const e = extreme(F, base, 'top', bb.x0 + s * 0.38, bb.x1 - s * 0.38); c = [e[0], e[1] - r * 0.25]; }
+  const r = d / 2, R = r + 2.4, gap = r + 0.6, bb = bbox(F, base), k = Math.max(-1, Math.min(1, (+mov || 0) / 100)) * 0.85; let c;
+  if (pos === 'izq' || pos === 'der') {
+    const y = bb.cy + k * bb.bh / 2; const e = ya !== undefined && !k ? extreme(F, base, pos === 'izq' ? 'left' : 'right', ya, yb) : extreme(F, base, pos === 'izq' ? 'left' : 'right', y - 1, y + 1);
+    c = [e[0] + (pos === 'izq' ? -gap : gap), e[1]];
+  } else {
+    const x = bb.cx + k * bb.bw / 2; const s = bb.bw; const dir = pos === 'abajo' ? 'bottom' : 'top';
+    const e = k ? extreme(F, base, dir, x - 1, x + 1) : extreme(F, base, dir, bb.x0 + s * 0.38, bb.x1 - s * 0.38);
+    c = [e[0], e[1] + (pos === 'abajo' ? gap : -gap)];
+  }
   const hole = F.disk(c[0], c[1], r);
   const nb = sub(close(F, or(base, F.disk(c[0], c[1], R)), 1.2), hole);
-  return { base: nb, hole, clear: F.disk(c[0], c[1], R + 0.6) };
+  return { base: nb, hole, clear: F.disk(c[0], c[1], gap) };
 }
 /* lengüeta inferior + peana con ranura (en posición y0) */
 function standParts(F, tabW, thick, cx, y0) {
@@ -61,7 +68,7 @@ function gNombre(p, o = {}) {
   let mid = close(F, dilate(F, T, b), Math.min(1.5, b));
   let base = o.tres ? close(F, dilate(F, T, b + b2), 1.5) : mid;
   if (o.pie) { const bb = bbox(F, base); const bar = F.rect(bb.x0 + 2, bb.y1 - 5, bb.x1 - 2, bb.y1, 1); base = or(base, bar); if (!o.tres) mid = base; }
-  const h = holeTab(F, base, o.sinAnilla ? 'no' : p.agujero, p.dAg); base = h.base;
+  const h = holeTab(F, base, o.sinAnilla ? 'no' : p.agujero, p.dAg, undefined, undefined, p.movAg); base = h.base;
   const cl = h.clear ? (m) => sub(m, h.clear) : (m) => m;
   const hb = p.hBase, ht = p.hTexto;
   if (o.tres) return { F, layers: [L('Base', base, 0, hb, p.c1 || C.negro), L('Contorno', cl(mid), hb, hb + p.hMedio, C.blanco), L('Texto', cl(T), hb + p.hMedio, hb + p.hMedio + ht, C.rosa)] };
@@ -75,7 +82,7 @@ function gSuperpuestos(p, o = {}) {
   const y1 = -H / 2 + d1.h / 2, y2 = y1 + d1.h / 2 + d2.h * 0.25;
   const T1 = F.text(lines(p.texto, 'Elisa'), f1, d1.s, -p.ancho * 0.08, y1), T2 = F.text(lines(p.texto2, 'Borges'), f2, d2.s, p.ancho * 0.12, y2);
   let base = close(F, dilate(F, or(T1, T2), p.borde), 1.5);
-  const h = holeTab(F, base, o.sinAnilla ? 'no' : p.agujero, p.dAg); base = h.base;
+  const h = holeTab(F, base, o.sinAnilla ? 'no' : p.agujero, p.dAg, undefined, undefined, p.movAg); base = h.base;
   const cl = m => h.clear ? sub(m, h.clear) : m;
   const hb = p.hBase;
   return { F, layers: [L('Base', base, 0, hb, C.negro), L('Nombre 1', cl(sub(T1, dilate(F, T2, 0.8))), hb, hb + p.hTexto, C.lila), L('Nombre 2', cl(T2), hb, hb + p.hTexto + 0.6, C.oro)] };
@@ -101,7 +108,7 @@ function gPlaca(p, o = {}) {
   if (m2) T = or(T, F.text(t2, f2, s * k2, cx, y + m2.h * s * k2 / 2));
   const rim = p.borde || 0;
   T = and(T, erode(F, S, rim + 0.8));
-  const h = holeTab(F, S, p.agujero, p.dAg); let base = h.base;
+  const h = holeTab(F, S, p.agujero, p.dAg, undefined, undefined, p.movAg); let base = h.base;
   const cl = m => h.clear ? sub(m, h.clear) : m;
   const hb = p.hBase, hr = p.hRel; const layers = [];
   if (p.nfc) { const pocket = F.disk(0, 0, p.dNfc / 2 + 0.3); layers.push(L('Base', base, 0, 0.8, o.c1 || C.azul), L('Hueco NFC (pausa aquí)', sub(base, pocket), 0.8, 0.8 + p.eNfc, o.c1 || C.azul), L('Tapa', base, 0.8 + p.eNfc, Math.max(hb, 1.8 + p.eNfc), o.c1 || C.azul)); }
@@ -128,7 +135,7 @@ function gChapa(p, o = {}) {
   const fit = FIT[p.forma] || [0, 0]; const cy = p.forma === 'circulo' ? 0 : Wo * (fit[3] || 0);
   const S = or(F.shape(p.forma, 0, 0, Wo, Wo), F.disk(0, cy, D / 2 + p.pared));
   const pocket = F.disk(0, cy, D / 2), lipIn = F.disk(0, cy, D / 2 - p.labio);
-  const h = holeTab(F, S, o.iman ? 'no' : p.agujero, p.dAg); const base = h.base;
+  const h = holeTab(F, S, o.iman ? 'no' : p.agujero, p.dAg, undefined, undefined, p.movAg); const base = h.base;
   const fondo = o.iman ? sub(base, F.disk(0, cy, D / 2 - 3)) : base;
   const f0 = 1.2, hc = p.hChapa;
   const ztop = f0 + hc + 0.8; const layers = [L('Fondo', fondo, 0, f0, C.azul), L('Pared', sub(base, pocket), f0, f0 + hc, C.azul), L('Pestaña de sujeción', sub(base, lipIn), f0 + hc, ztop, C.azul)];
@@ -146,7 +153,7 @@ function gChapa(p, o = {}) {
 /* llavero espejo con texto en arco */
 function gEspejo(p) {
   const r0 = p.dEspejo / 2 + 0.25, R = r0 + p.banda; const F = frame(2 * R + 16, 2 * R + 16);
-  const h = holeTab(F, F.disk(0, 0, R), p.agujero, p.dAg); const f = font(p.fuente);
+  const h = holeTab(F, F.disk(0, 0, R), p.agujero, p.dAg, undefined, undefined, p.movAg); const f = font(p.fuente);
   const rT = r0 + p.banda * 0.28; const sz = p.banda * 0.62;
   let T = F.blank(); if (p.texto) T = or(T, F.arcText(p.texto, f, sz, 0, 0, rT, false)); if (p.texto2) T = or(T, F.arcText(p.texto2, f, sz, 0, 0, rT + sz * 0.15, true));
   T = and(T, sub(F.disk(0, 0, R - 0.8), F.disk(0, 0, r0 + 0.6)));
@@ -156,7 +163,7 @@ function gEspejo(p) {
 /* medallón flor con nombre en arco */
 function gRosa(p) {
   const R = p.diametro / 2; const F = frame(2 * R + 16, 2 * R + 16);
-  const outer = F.shape('ondulado', 0, 0, 2 * R, 2 * R); const h = holeTab(F, outer, p.agujero, p.dAg); const cl = m => h.clear ? sub(m, h.clear) : m;
+  const outer = F.shape('ondulado', 0, 0, 2 * R, 2 * R); const h = holeTab(F, outer, p.agujero, p.dAg, undefined, undefined, p.movAg); const cl = m => h.clear ? sub(m, h.clear) : m;
   const cy = p.texto ? -R * 0.14 : 0; const rr = R * (p.texto ? 0.6 : 0.78); const layers = [L('Base', h.base, 0, 2.2, C.verde)];
   const rings = 5; let z = 2.2;
   for (let k = 0; k < rings; k++) { const sc = 1 - k * 0.19; const pet = F.draw(c => { c.translate(0, cy); c.rotate(k * 0.55); K.shapePath(c, 'flor', 0, 0, 2 * rr * sc, 2 * rr * sc); c.fill(); });
@@ -201,7 +208,7 @@ function gResina(p) {
   const Lm = F.image(p.img, 0, 0, s.w, s.h, { thr: p.umbral });
   const O = fillHoles(F, close(F, dilate(F, Lm, 0.4), 2));
   const outer = dilate(F, O, p.pared);
-  const h = holeTab(F, outer, p.agujero, p.dAg);
+  const h = holeTab(F, outer, p.agujero, p.dAg, undefined, undefined, p.movAg);
   const walls = or(outline(F, O, p.pared), dilate(F, and(Lm, O), 0.25));
   return { F, layers: [L('Fondo', h.base, 0, 1.6, C.marron), L('Paredes', h.clear ? sub(walls, h.hole) : walls, 1.6, 1.6 + p.hPared, C.oro)] };
 }
@@ -920,15 +927,7 @@ function cinta(F, cy, size) {
   /* sitio para la anilla: en mitad de la tira izquierda del bucle */
   return { sil: or(A, B), lazo, agujero: P(-26, -38) };
 }
-/* anilla en una pestaña por fuera del borde (no recorta la figura).
-   lado: arriba | izq | der | abajo; mov: -100..100 % para desplazarla a lo largo de ese borde */
-function anillaFuera(F, base, bb, lado, mov = 0) {
-  const r = 2, R = r + 2.4, k = Math.max(-1, Math.min(1, mov / 100)) * 0.85; let c;
-  if (lado === 'arriba' || lado === 'abajo') { const x = bb.cx + k * bb.bw / 2; const e = extreme(F, base, lado === 'arriba' ? 'top' : 'bottom', x - 1, x + 1); c = [e[0], e[1] + (lado === 'arriba' ? -1 : 1) * (r + 0.6)]; }
-  else { const y = bb.cy + k * bb.bh / 2; const e = extreme(F, base, lado === 'izq' ? 'left' : 'right', y - 1, y + 1); c = [e[0] + (lado === 'izq' ? -1 : 1) * (r + 0.6), e[1]]; }
-  const hole = F.disk(c[0], c[1], r);
-  return { base: sub(close(F, or(base, F.disk(c[0], c[1], R)), 1.2), hole), hole, clear: F.disk(c[0], c[1], r + 0.6) };
-}
+const anillaFuera = (F, base, bb, lado, mov) => holeTab(F, base, lado, 4, undefined, undefined, mov);
 function gAbrelatas2(p) {
   const size = p.tam, aR = p.anchoR || 16, Wb = aR + 4.4, fondo = p.fondoR || 16, Lb = fondo + 6, ext = Math.max(6, fondo * 0.45);
   const F = frame(Math.max(size + 2 * p.borde, Wb) + 2 * ext + 20, size + Lb + 2 * p.borde + 20);
@@ -1003,7 +1002,7 @@ function gLlaveroImagen(p) {
   for (let i = 0; i < n; i++) { const v = Lu[i]; if (v < 0) continue; if (v < 0.94) sil[i] = 1; if (v < 0.62) mid[i] = 1; if (v < 0.3) dark[i] = 1; }
   let S = fillHoles(F, close(F, sil, 1.2)); if (imgHasAlphaSafe(p.img)) S = fillHoles(F, close(F, F.image(p.img, 0, cy, s.w, s.h, { mode: 'alpha' }), 1.2));
   let T = F.blank(); if (p.texto) { const f = font(p.fuente); const t = lines(p.texto, ''); const sz = fitSize(t, f, p.tam * 1.1, tH); T = F.text(t, f, sz, 0, cy + s.h / 2 + tH / 2 + 1); }
-  let base = close(F, dilate(F, or(S, T), p.borde), 2); const h = holeTab(F, base, p.agujero, p.dAg); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
+  let base = close(F, dilate(F, or(S, T), p.borde), 2); const h = holeTab(F, base, p.agujero, p.dAg, undefined, undefined, p.movAg); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
   const layers = [];
   if (p.nfc) { const pocket = F.disk(0, cy, p.dNfc / 2 + 0.3); layers.push(L('Base', base, 0, 0.8, C.blanco), L('Base (hueco NFC: pausa)', sub(base, pocket), 0.8, 0.8 + p.eNfc, C.blanco), L('Base (cierre)', base, 0.8 + p.eNfc, 2.2 + p.eNfc, C.blanco)); }
   else layers.push(L('Base', base, 0, 2.4, C.blanco));
@@ -1024,7 +1023,7 @@ function gRosaNombre(p) {
   const f = font(p.fuente); const t = lines(p.texto, 'mamá'); const d = tdim(t, f, p.ancho); const R = Math.max(d.h * 0.85, 6); const F = frame(p.ancho + 2 * R + 30, Math.max(d.h, 2 * R) + 18);
   const x0 = -(p.ancho + 2 * R + 4) / 2 + R; const rose = rosaLinea(F, x0, 0, R, Math.max(1, R * 0.12)); const T = F.text(t, f, d.s, x0 + R + 3 + p.ancho / 2, 0, { bold: 0.3 });
   const tb = bbox(F, T); const tail = F.draw(c => { c.lineWidth = 1.3; c.beginPath(); c.moveTo(tb.x1 - 1.5, tb.y1 - d.h * 0.25); c.quadraticCurveTo(tb.x1 + 5, tb.y1 - d.h * 0.1, tb.x1 + 10, tb.y1 - d.h * 0.45); c.stroke(); });
-  const all = or(rose, T, tail); let base = close(F, dilate(F, all, p.borde), 1.5); const h = holeTab(F, base, p.agujero, p.dAg); base = h.base;
+  const all = or(rose, T, tail); let base = close(F, dilate(F, all, p.borde), 1.5); const h = holeTab(F, base, p.agujero, p.dAg, undefined, undefined, p.movAg); base = h.base;
   return { F, layers: [L('Base', base, 0, 2.4, C.blanco), L('Rosa y nombre', h.clear ? sub(all, h.clear) : all, 2.4, 3.4, C.rosa)] };
 }
 /* varios llaveros de una vez (uno por nombre) */
