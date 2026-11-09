@@ -710,9 +710,12 @@ function gTermo(p) {
     parts.push(LM('Molde hembra (en espejo)', mesh(fem, off), C.rosa));
   }
   if (p.malla) {
-    const extra = tray ? H / Math.sin((p.angulo || 70) * Math.PI / 180) + 3 : H * 1.25 + 3; const G = frame(W + 2 * extra + 6, Hs + 2 * extra + 6, { margin: 4, maxPx: Math.min(900, K.QUALITY.maxPx), res: Math.min(4, K.QUALITY.res) });
+    /* tela que sobra al cubrir el borde: lo que mide la curva (o la pared) menos lo que ocupa en plano, más una pestaña plana */
+    const ang = (p.angulo || 70) * Math.PI / 180, a = Math.max(1, Math.min(R, Math.min(W, Hs) / 2)), b = H;
+    const curva = tray ? H / Math.sin(ang) - H / Math.tan(ang) : Math.PI / 4 * (3 * (a + b) - Math.sqrt((3 * a + b) * (a + 3 * b))) - a;
+    const extra = Math.max(1, curva) + (p.pestana ?? 2); const G = frame(W + 2 * extra + 6, Hs + 2 * extra + 6, { margin: 4, maxPx: Math.min(900, K.QUALITY.maxPx), res: Math.min(4, K.QUALITY.res) });
     const sg = sigue ? silueta(G) : null;
-    let S2 = sigue ? sg.S : G.shape(p.forma, 0, 0, W, Hs); let flat = K.close(G, dilate(G, S2, extra), Math.min(6, extra));
+    let S2 = sigue ? sg.S : G.shape(p.forma, 0, 0, W, Hs); let flat = K.close(G, dilate(G, S2, extra), Math.min(3, extra));
     let D2 = G.blank(); const ff = FIT[p.forma] || [.6, .45];
     if (sigue) D2 = dilate(G, sg.im, 0.3);
     else if (p.diseno === 'texto') { const f = font(p.fuente); const tx = lines(p.texto, 'Feliz Navidad'); const sz = fitSize(tx, f, W * ff[0], Hs * ff[1] * 1.3, 1.05); D2 = G.text(tx, f, sz, W * (ff[2] || 0), Hs * (ff[3] || 0), { lh: 1.05, bold: 0.5 }); }
@@ -1261,7 +1264,7 @@ const TERMO = (o = {}) => [{ ...shp(o.forma || 'corazon', ['corazon', 'circulo',
   num('eva', 'Holgura entre moldes (grosor de la malla o lámina)', o.eva || 2, 0.5, 6, 0.1), num('base', 'Grosor de la base', 3, 2, 8, 0.5), sel('piezas', 'Piezas', 'ambas', { ambas: 'Macho + hembra', macho: 'Solo macho' }), chk('guias', 'Guías de centrado en las esquinas', true),
   chk('malla', 'Incluir la figura de malla para imprimir', o.malla ?? true), sel('rejilla', 'Agujeros de la malla', 'cuadricula', { cuadricula: 'Cuadrados', rombos: 'Rombos', panal: 'Hexágonos', mosaico: 'Mosaico' }, { show: p => p.malla }),
   num('paso', 'Tamaño de agujero', 3.2, 2, 8, 0.2, { show: p => p.malla }), num('hilo', 'Grosor del hilo', 0.9, 0.5, 2, 0.1, { show: p => p.malla }), num('bordeMalla', 'Borde macizo', 2.5, 1, 6, 0.5, { show: p => p.malla }),
-  num('eMalla', 'Grosor de la malla', 0.8, 0.4, 2, 0.1, { show: p => p.malla }), sel('disenoMalla', 'Diseño en la malla', 'macizo', { macizo: 'Macizo (como bordado)', malla: 'Malla de otro color' }, { show: p => p.malla && p.diseno !== 'ninguno' }), chk('anilla', 'Pitorro para colgar', o.anilla ?? false, { show: p => p.malla }), sel('trasera', 'Malla trasera', o.trasera || 'si', { si: 'Sí, con pivotes de cierre', no: 'Solo la delantera' }, { show: p => p.malla })];
+  num('eMalla', 'Grosor de la malla', 0.8, 0.4, 2, 0.1, { show: p => p.malla }), num('pestana', 'Pestaña plana alrededor de la malla', 2, 0, 10, 0.5, { show: p => p.malla }), sel('disenoMalla', 'Diseño en la malla', 'macizo', { macizo: 'Macizo (como bordado)', malla: 'Malla de otro color' }, { show: p => p.malla && p.diseno !== 'ninguno' }), chk('anilla', 'Pitorro para colgar', o.anilla ?? false, { show: p => p.malla }), sel('trasera', 'Malla trasera', o.trasera || 'si', { si: 'Sí, con pivotes de cierre', no: 'Solo la delantera' }, { show: p => p.malla })];
 M('termo', 'Generador de termoformado', 'Cualquier forma, en cúpula acolchada o en bandeja, con texto, imagen o copo.', TERMO({ texto: 'Mamá', forma: 'corazon', eva: 1, anilla: true }), p => gTermo(p));
 M('termo-nav', 'Molde de termoformado navideño', 'Bolsita de malla de dos caras con mensaje de Navidad, y sus moldes.', TERMO({ texto: 'Feliz\nNavidad', forma: 'corazon', eva: 1, anilla: true }), p => gTermo(p));
 M('termo-copo', 'Molde de termoformado: copo', 'Bolsita de malla con un copo de nieve, y sus moldes.', TERMO({ forma: 'flor', diseno: 'copo', texto: '', eva: 1, anilla: true }), p => gTermo(p));
