@@ -85,7 +85,9 @@ async function panel(filtro = 'pendiente') {
   if (!c.panel) { box.append(el('p', { class: 'note' }, 'Falta poner la contraseña del panel: en Cloudflare → Workers y Pages → taller3d → Configuración → Variables y secretos, añade un secreto ADMIN_PASSWORD y vuelve a desplegar.')); return; }
   if (!clave()) {
     const pw = el('input', { type: 'password', placeholder: 'Contraseña del panel', autocomplete: 'current-password' }); const m = el('p', { class: 'muted small' });
-    const fm = el('form', { class: 'panel mej-form' }, el('div', { class: 'f' }, el('label', {}, 'Contraseña'), pw), el('button', { class: 'primary', type: 'submit' }, 'Entrar'), m);
+    /* ojito para ver u ocultar la contraseña */
+    const ojo = el('button', { type: 'button', class: 'mej-ojo', title: 'Mostrar contraseña', 'aria-label': 'Mostrar contraseña', onclick: () => { const ver = pw.type === 'password'; pw.type = ver ? 'text' : 'password'; ojo.textContent = ver ? '🙈' : '👁️'; ojo.title = ojo.ariaLabel = ver ? 'Ocultar contraseña' : 'Mostrar contraseña'; pw.focus(); } }, '👁️');
+    const fm = el('form', { class: 'panel mej-form' }, el('div', { class: 'f' }, el('label', {}, 'Contraseña'), el('div', { class: 'mej-pw' }, pw, ojo)), el('button', { class: 'primary', type: 'submit' }, 'Entrar'), m);
     fm.addEventListener('submit', async e => { e.preventDefault(); guardarClave(pw.value); try { await api('?estado=pendiente'); panel(filtro); } catch (er) { m.textContent = er.message; } });
     box.append(fm); pw.focus(); return;
   }
