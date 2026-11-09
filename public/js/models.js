@@ -169,18 +169,29 @@ function gRosa(p) {
 }
 /* abrelatas: bolsillo horizontal abierto por la punta donde entra la anilla de la lata */
 const RANURA = () => [num('grosor', 'Grosor del llavero', 6.4, 4.8, 9, 0.1), num('anchoR', 'Ancho de la ranura', 16, 12, 22, 0.2), num('baseR', 'Altura inicial de la ranura', 0.8, 0.4, 2, 0.1), num('altoR', 'Alto de la ranura', 2.6, 1.6, 3.6, 0.1), num('fondoR', 'Profundidad de la ranura', 16, 10, 24, 0.5), chk('circR', 'Alivio circular en la entrada', true)];
-function abreCapas(base, pocket, p, color, nfcPocket) {
-  const f = p.baseR || 0.8, sh = p.altoR || 2.6; let T = Math.max(p.grosor || 6.4, f + sh + 1.6); const c = color || C.blanco; const out = [L('Base', base, 0, f, c), L('Base (ranura)', sub(base, pocket), f, f + sh, c)];
-  if (nfcPocket) { const e = p.eNfc || 1; T = Math.max(T, f + sh + 0.8 + e + 0.8); const zN = T - 0.8 - e; if (zN > f + sh + 0.01) out.push(L('Base (techo)', base, f + sh, zN, c)); out.push(L('Base (hueco NFC: pausa)', sub(base, nfcPocket), zN, zN + e, c), L('Base (cierre)', base, zN + e, T, c)); }
+function abreCapas(F, base, pocket, p, color, nfcPocket) {
+  const f = p.baseR || 0.8, sh = p.altoR || 2.6; let T = Math.max(p.grosor || 6.4, f + sh + 1.6); const c = color || C.blanco;
+  const e = p.eNfc || 1; let zN = null; if (nfcPocket) { T = Math.max(T, f + sh + 0.8 + e + 0.8); zN = T - 0.8 - e; }
+  const nota = nfcPocket ? ` Pon una pausa a ${(zN + e).toFixed(1)} mm (cuando el hueco NFC queda abierto, antes de taparlo) y mete la etiqueta.` : '';
+  /* con Manifold: una sola pieza maciza con la ranura y el hueco NFC restados en 3D */
+  if (K.hasCSG()) {
+    try {
+      const s = K.subtract(K.maskSolid(F, base, 0, T), K.maskSolid(F, pocket, f, f + sh), nfcPocket ? K.maskSolid(F, nfcPocket, zN, zN + e) : null);
+      return { layers: [LM('Base', K.solidMesh(s), c)], T, nota };
+    } catch (err) { console.warn('abrelatas: sin Manifold, se usan capas', err); }
+  }
+  /* sin Manifold: la misma geometría apilando capas */
+  const out = [L('Base', base, 0, f, c), L('Base (ranura)', sub(base, pocket), f, f + sh, c)];
+  if (nfcPocket) { if (zN > f + sh + 0.01) out.push(L('Base (techo)', base, f + sh, zN, c)); out.push(L('Base (hueco NFC)', sub(base, nfcPocket), zN, zN + e, c), L('Base (cierre)', base, zN + e, T, c)); }
   else out.push(L('Base (techo)', base, f + sh, T, c));
-  return { layers: out, T };
+  return { layers: out, T, nota };
 }
 const NOTA_ABRE = 'Mete la anilla de la lata en la ranura de la punta y levanta el llavero para abrirla sin usar las uñas. La ranura se imprime sin soportes (es un puente corto).';
 function gAbrelatas(p) {
   const L0 = p.largo, aR = p.anchoR, Wd = Math.max(p.anchoP, aR + 4.4); const F = frame(L0 + 10, Wd + 10); const x0 = -L0 / 2, x1 = L0 / 2;
   const body = F.draw(c => { c.beginPath(); c.moveTo(x0 + Wd / 2, -Wd / 2); c.lineTo(x1 - 3, -Wd / 2); c.quadraticCurveTo(x1, -Wd / 2, x1, -Wd / 2 + 3); c.lineTo(x1, Wd / 2 - 3); c.quadraticCurveTo(x1, Wd / 2, x1 - 3, Wd / 2); c.lineTo(x0 + Wd / 2, Wd / 2); c.arc(x0 + Wd / 2, 0, Wd / 2, Math.PI / 2, Math.PI * 1.5); c.closePath(); c.fill(); });
   const S = sub(body, F.disk(x0 + Wd / 2, 0, 2.6)); const pocket = F.rect(x1 - p.fondoR, -aR / 2, x1 + 3, aR / 2, 0.8);
-  const S2 = p.circR ? sub(S, F.disk(x1, 0, aR * 0.28)) : S; const ab = abreCapas(S2, pocket, p, C.rosa);
+  const S2 = p.circR ? sub(S, F.disk(x1, 0, aR * 0.28)) : S; const ab = abreCapas(F, S2, pocket, p, C.rosa);
   const f = font(p.fuente); const xa = x0 + Wd + 1, xb = x1 - 2; const tw = xb - xa; const t = lines(p.texto, 'Ana'); const sz = fitSize(t, f, tw, Wd * 0.62); const T = and(F.text(t, f, sz, (xa + xb) / 2, 0), erode(F, S2, 1.4));
   return { F, layers: [...ab.layers, L('Texto', T, ab.T, ab.T + 0.8, C.blanco)], note: NOTA_ABRE };
 }
@@ -350,7 +361,7 @@ function gFamilia(p) {
 }
 function gLitofania(p) {
   const s = imgFit(p.img, p.ancho, p.ancho * 1.5); const res = Math.min(4, 420 / Math.max(s.w, s.h)); const nx = Math.round(s.w * res) + 1, ny = Math.round(s.h * res) + 1;
-  const c = document.createElement('canvas'); c.width = nx; c.height = ny; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, nx, ny); x.drawImage(p.img, 0, 0, nx, ny);
+  const c = K.canvas(nx, ny); const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, nx, ny); x.drawImage(p.img, 0, 0, nx, ny);
   const d = x.getImageData(0, 0, nx, ny).data; const hm = new Float32Array(nx * ny); const step = 1 / res; const fb = p.marco * res;
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const k = j * nx + i; let L = (0.299 * d[k * 4] + 0.587 * d[k * 4 + 1] + 0.114 * d[k * 4 + 2]) / 255; if (p.invertir) L = 1 - L;
     let z = p.eMax - (p.eMax - p.eMin) * L; if (i < fb || j < fb || i >= nx - fb || j >= ny - fb) z = p.eMax + (p.marco ? 0.6 : 0); hm[k] = z; }
@@ -887,10 +898,10 @@ function gAbrelatas2(p) {
   const block = F.draw(c => { c.beginPath(); K.roundRect(c, -Wb / 2, Math.min(yA, yB), Wb, Math.abs(yB - yA), 2.5); c.fill(); });
   let base = close(F, or(outline, block), 1.5); const h = holeTab(F, base, 'arriba', 4); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
   if (p.circR) base = sub(base, F.disk(0, yB, aR * 0.28)); const yP = yB - dir * p.fondoR; const pocket = F.rect(-aR / 2, Math.min(yP, yB + dir * 3), aR / 2, Math.max(yP, yB + dir * 3), 0.8);
-  const ab = abreCapas(base, pocket, p, p.color1 || C.blanco, p.nfc ? F.disk(0, cy, p.dNfc / 2 + 0.3) : null); const g = ab.T; const layers = ab.layers;
+  const ab = abreCapas(F, base, pocket, p, p.color1 || C.blanco, p.nfc ? F.disk(0, cy, p.dNfc / 2 + 0.3) : null); const g = ab.T; const layers = ab.layers;
   const first = new Set(['Imagen', 'Pétalos', 'Bote', 'Figura', 'Tapón']); const top = Math.max(...hd.capas.filter(cp => first.has(cp.name)).map(cp => cp.dz), 0);
   for (const cp of hd.capas) { const m = cl(and(cp.mask, erode(F, outline, 0.4))); if (!K.count(m)) continue; if (first.has(cp.name)) layers.push(L(cp.name, m, g, g + cp.dz, cp.color)); else layers.push(L(cp.name, m, g + top, g + top + cp.dz * 0.6, cp.color)); }
-  return { F, layers, note: NOTA_ABRE + (p.nfc ? ' Pausa al empezar "Base (hueco NFC: pausa)" para meter la etiqueta NFC.' : '') };
+  return { F, layers, note: NOTA_ABRE + ab.nota };
 }
 /* rattan */
 function rattanPiece(F, M, p) { const fr = ring(F, M, p.marco); const inner = erode(F, M, p.marco - 0.6); const rt = and(F.pattern('rattan', p.paso, 1, 1), inner); return { fr, rt }; }
@@ -929,7 +940,7 @@ function gLlaveroImagen(p) {
   if (p.texto) layers.push(L('Texto', cl(T), z, z + 1, C.negro));
   return { F, layers: layers.filter(Lr => K.count(Lr.mask)), note: (p.nfc ? 'Pausa al empezar "Base (cierre)" para meter la etiqueta NFC. ' : '') + 'Los colores salen de los tonos de la imagen (claros, medios y oscuros).' };
 }
-function imgHasAlphaSafe(img) { try { const c = document.createElement('canvas'); c.width = c.height = 48; const x = c.getContext('2d'); x.drawImage(img, 0, 0, 48, 48); const d = x.getImageData(0, 0, 48, 48).data; let t = 0; for (let k = 3; k < d.length; k += 4) if (d[k] < 200) t++; return t > 48 * 48 * 0.02; } catch (e) { return false; } }
+function imgHasAlphaSafe(img) { try { const c = K.canvas(48, 48); const x = c.getContext('2d'); x.drawImage(img, 0, 0, 48, 48); const d = x.getImageData(0, 0, 48, 48).data; let t = 0; for (let k = 3; k < d.length; k += 4) if (d[k] < 200) t++; return t > 48 * 48 * 0.02; } catch (e) { return false; } }
 /* rosa de línea con nombre */
 function rosaLinea(F, cx, cy, R, lw) {
   return F.draw(c => { c.lineWidth = lw; c.beginPath(); for (let a = 0; a < 4.6 * Math.PI; a += 0.08) { const r = R * 0.05 * a; c.lineTo(cx + Math.cos(a) * r * 0.95, cy - R * 0.12 + Math.sin(a) * r * 0.75); } c.stroke();

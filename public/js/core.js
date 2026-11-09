@@ -1,7 +1,12 @@
 /* Taller 3D — motor geométrico (código original)
-   Máscaras 2D en mm → mallas extruidas por capas, torno, mapa de alturas, exportación STL/3MF. */
+   Máscaras 2D en mm → mallas extruidas por capas, torno, mapa de alturas, sólidos 3D (Manifold), exportación STL/3MF.
+   Funciona igual en la página y dentro del Web Worker (usa OffscreenCanvas cuando no hay document). */
 'use strict';
 const K = (() => {
+
+const IS_DOM = typeof document !== 'undefined';
+/* lienzo 2D: <canvas> en la página, OffscreenCanvas en el worker */
+function mkCanvas(w, h) { if (IS_DOM) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; } return new OffscreenCanvas(w, h); }
 
 const QUALITY = { maxPx: 1150, res: 5 };
 function setQuality(maxPx, res) { QUALITY.maxPx = maxPx; QUALITY.res = res; }
@@ -24,9 +29,30 @@ const FONTS = [
 const EMOJI = { id: 'emoji', fam: null, w: 400 };
 function font(id) { return id === 'emoji' ? EMOJI : (FONTS.find(f => f.id === id) || FONTS[0]); }
 function fontStr(f, px) { return f.fam ? `${f.w} ${px}px "${f.fam}", sans-serif` : `${px}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; }
-async function loadFont(f) { if (!f.fam || !document.fonts) return; try { await document.fonts.load(`${f.w} 60px "${f.fam}"`); } catch (e) { } }
+/* en el worker no se ven las fuentes de la página: se leen del CSS de Google Fonts y se registran con FontFace */
+let fontSrc = null, fontReg = null;
+function setFontSource(url) { fontSrc = url || null; }
+function registerFonts() {
+  if (fontReg) return fontReg;
+  return fontReg = (async () => {
+    const by = {}; if (!fontSrc || typeof FontFace === 'undefined' || !self.fonts) return by;
+    const css = await (await fetch(fontSrc)).text();
+    for (const blk of css.match(/@font-face\s*{[^}]*}/g) || []) {
+      const fam = /font-family:\s*['"]?([^;'"]+)/.exec(blk), wt = /font-weight:\s*(\d+)/.exec(blk), src = /src:\s*(url\([^)]+\)[^;]*)/.exec(blk), ur = /unicode-range:\s*([^;]+)/.exec(blk);
+      if (!fam || !src) continue; const w = wt ? wt[1] : '400';
+      const ff = new FontFace(fam[1].trim(), src[1], ur ? { weight: w, unicodeRange: ur[1].trim() } : { weight: w });
+      self.fonts.add(ff); (by[fam[1].trim() + '|' + w] = by[fam[1].trim() + '|' + w] || []).push(ff);
+    }
+    return by;
+  })().catch(e => { console.warn('fuentes', e); return {}; });
+}
+async function loadFont(f) {
+  if (!f.fam) return;
+  if (IS_DOM) { if (!document.fonts) return; try { await document.fonts.load(`${f.w} 60px "${f.fam}"`); } catch (e) { } return; }
+  const by = await registerFonts(); await Promise.all((by[f.fam + '|' + f.w] || []).map(ff => ff.load().catch(() => { })));
+}
 
-const mctx = document.createElement('canvas').getContext('2d');
+const mctx = mkCanvas(8, 8).getContext('2d');
 /* mide un bloque de líneas; resultados por 1 mm de cuerpo de letra */
 function measure(lines, f, lh = 1.15) {
   lines = (Array.isArray(lines) ? lines : [lines]).filter(t => t !== '' && t != null);
@@ -48,7 +74,7 @@ function frame(W, H, opt = {}) {
   const res = Math.min(opt.res || QUALITY.res, maxPx / Math.max(W, H));
   const w = Math.ceil(W * res), h = Math.ceil(H * res);
   const F = { w, h, res, W: w / res, H: h / res, n: w * h };
-  F.canvas = () => { const c = document.createElement('canvas'); c.width = w; c.height = h; const ctx = c.getContext('2d', { willReadFrequently: true }); return { c, ctx }; };
+  F.canvas = () => { const c = mkCanvas(w, h); const ctx = c.getContext('2d', { willReadFrequently: true }); return { c, ctx }; };
   F.fromCanvas = (ctx) => { const d = ctx.getImageData(0, 0, w, h).data; const m = new Uint8Array(w * h); for (let i = 0, k = 3; i < m.length; i++, k += 4) m[i] = d[k] > 127 ? 1 : 0; clearBorder(F, m); return m; };
   /* dibujo libre en mm */
   F.draw = (fn) => { const { ctx } = F.canvas(); ctx.setTransform(res, 0, 0, res, w / 2, h / 2); ctx.fillStyle = '#000'; ctx.strokeStyle = '#000'; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; fn(ctx); return F.fromCanvas(ctx); };
@@ -130,7 +156,7 @@ function frame(W, H, opt = {}) {
 function clearBorder(F, m) { const { w, h } = F; for (let i = 0; i < w; i++) { m[i] = 0; m[(h - 1) * w + i] = 0; } for (let j = 0; j < h; j++) { m[j * w] = 0; m[j * w + w - 1] = 0; } }
 function imgHasAlpha(img) {
   if (img._hasAlpha !== undefined) return img._hasAlpha;
-  const c = document.createElement('canvas'); const s = 64; c.width = s; c.height = s; const x = c.getContext('2d'); x.drawImage(img, 0, 0, s, s);
+  const s = 64; const c = mkCanvas(s, s); const x = c.getContext('2d'); x.drawImage(img, 0, 0, s, s);
   const d = x.getImageData(0, 0, s, s).data; let t = 0; for (let k = 3; k < d.length; k += 4) if (d[k] < 200) t++;
   img._hasAlpha = t > s * s * 0.02; return img._hasAlpha;
 }
@@ -533,6 +559,66 @@ function level(sd, a, b) { const o = new Uint8Array(sd.length); for (let i = 0; 
 function traceLoops(F, m, eps) { const loops = maskToMesh(F, m, 0, 0, 'loops'); return loops.map(l => rdpClosed(l, eps ?? 0.3 / F.res)).filter(l => l.length > 2 && Math.abs(area(l)) > 0.02); }
 function meshFromMasks(F, layer) { const m = maskToMesh(F, layer.mask, layer.z0, layer.z1); fixOrientation(m); return m; }
 
+/* ---------- sólidos 3D con Manifold (WebAssembly) ----------
+   Si Manifold está cargado se pueden hacer uniones, restas e intersecciones 3D reales que siempre dan
+   mallas cerradas y válidas. Si no se ha podido cargar, hasCSG() es false y los modelos usan el método por capas. */
+let MF = null; const GC = [];
+function useManifold(wasm) { MF = wasm; }
+function hasCSG() { return !!MF; }
+const keep = o => { GC.push(o); return o; };
+/* libera la memoria WebAssembly de todo lo creado desde la última llamada */
+function csgFree() { while (GC.length) { const o = GC.pop(); try { if (o && typeof o.delete === 'function') o.delete(); } catch (e) { } } }
+/* máscara 2D → prisma entre z0 y z1 */
+function maskSolid(F, mask, z0, z1) {
+  const loops = traceLoops(F, mask); if (!loops.length || z1 <= z0) return null;
+  return keep(keep(keep(new MF.CrossSection(loops, 'Positive')).extrude(z1 - z0)).translate([0, 0, z0]));
+}
+/* malla propia → sólido (une vértices repetidos); lanza error si la malla no es cerrada */
+function meshSolid(mesh) {
+  const M = new MF.Mesh({ numProp: 3, vertProperties: Float32Array.from(mesh.pos), triVerts: Uint32Array.from(mesh.idx) }); M.merge();
+  return keep(new MF.Manifold(M));
+}
+function union(list) { return keep(MF.Manifold.union(list)); }
+function subtract(a, ...bs) { let o = a; for (const b of bs) if (b) o = keep(o.subtract(b)); return o; }
+function intersect(a, b) { return keep(a.intersect(b)); }
+function solidMesh(s) { const m = s.getMesh(); const P = m.vertProperties, np = m.numProp, nv = P.length / np; const pos = new Array(nv * 3);
+  for (let i = 0; i < nv; i++) { pos[3 * i] = P[i * np]; pos[3 * i + 1] = P[i * np + 1]; pos[3 * i + 2] = P[i * np + 2]; } return { pos, idx: Array.from(m.triVerts) }; }
+/* comprueba una malla: cerrada (manifold), volumen y género */
+function checkMesh(mesh) {
+  if (!MF) return { ok: null };
+  try { const s = meshSolid(mesh); return { ok: s.status() === 'NoError' && !s.isEmpty(), status: s.status(), vol: s.volume(), genus: s.genus(), tris: s.numTri() }; }
+  catch (e) { return { ok: false, status: String(e.message || e) }; }
+}
+/* une todas las piezas en un único sólido válido (para el STL); null si alguna pieza no es cerrada */
+function unionMeshes(meshes) {
+  if (!MF) return null;
+  try { const s = union(meshes.filter(m => m.idx.length).map(meshSolid)); return s.isEmpty() ? null : solidMesh(s); }
+  catch (e) { console.warn('unión STL', e); return null; } finally { csgFree(); }
+}
+
+/* ---------- miniatura (vista superior de las capas) ---------- */
+function hex(c) { const n = parseInt(String(c || '#cccccc').slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+function renderThumb(r, W = 240, H = 180) {
+  const cv = mkCanvas(W, H); const x = cv.getContext('2d');
+  const items = r.layers.filter(L => L.mask || L.mesh).sort((a, b) => (a.z1 ?? 0) - (b.z1 ?? 0));
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; const F = r.F;
+  for (const L of items) { if (L.mask) { const b = bbox(F, L.mask); if (b) { x0 = Math.min(x0, b.x0); x1 = Math.max(x1, b.x1); y0 = Math.min(y0, b.y0); y1 = Math.max(y1, b.y1); } } else { const P = L.mesh.pos; for (let i = 0; i < P.length; i += 3) { x0 = Math.min(x0, P[i]); x1 = Math.max(x1, P[i]); y0 = Math.min(y0, -P[i + 1]); y1 = Math.max(y1, -P[i + 1]); } } }
+  if (!isFinite(x0)) return cv; const s = Math.min((W - 20) / (x1 - x0), (H - 20) / (y1 - y0)); const ox = W / 2 - (x0 + x1) / 2 * s, oy = H / 2 - (y0 + y1) / 2 * s;
+  for (const L of items) {
+    if (L.mask) { const { w, h } = F; const id = new ImageData(w, h); const col = hex(L.color); const shade = 0.82 + Math.min(0.18, (L.z1 || 0) / 40);
+      for (let i = 0; i < L.mask.length; i++) if (L.mask[i]) { id.data[i * 4] = col[0] * shade; id.data[i * 4 + 1] = col[1] * shade; id.data[i * 4 + 2] = col[2] * shade; id.data[i * 4 + 3] = 255; }
+      const t = mkCanvas(w, h); t.getContext('2d').putImageData(id, 0, 0);
+      x.save(); x.shadowColor = 'rgba(0,0,0,.18)'; x.shadowBlur = 3; x.shadowOffsetY = 1; x.imageSmoothingEnabled = true; x.drawImage(t, ox + (-F.W / 2) * s, oy + (-F.H / 2) * s, F.W * s, F.H * s); x.restore(); }
+    else { const P = L.mesh.pos, I = L.mesh.idx; const col = hex(L.color); const lx = -0.35, ly = 0.45, lz = 0.82;
+      for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
+        const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2], vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+        const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; if (nz <= 0) continue; const l = Math.hypot(nx, ny, nz);
+        const k = 0.55 + 0.45 * Math.max(0, (nx * lx + ny * ly + nz * lz) / l); x.fillStyle = `rgb(${col[0] * k | 0},${col[1] * k | 0},${col[2] * k | 0})`;
+        x.beginPath(); x.moveTo(ox + P[a] * s, oy - P[a + 1] * s); x.lineTo(ox + P[b] * s, oy - P[b + 1] * s); x.lineTo(ox + P[c] * s, oy - P[c + 1] * s); x.closePath(); x.fill(); x.strokeStyle = x.fillStyle; x.lineWidth = 0.6; x.stroke(); } }
+  }
+  return cv;
+}
+
 /* ---------- exportación ---------- */
 function toSTL(meshes) {
   let nt = 0; for (const m of meshes) nt += m.idx.length / 3;
@@ -575,7 +661,7 @@ async function to3MF(parts, title) {
 
 /* ---------- imágenes de ejemplo ---------- */
 function demoImage(kind = 'dibujo') {
-  const c = document.createElement('canvas'); c.width = c.height = 512; const x = c.getContext('2d');
+  const c = mkCanvas(512, 512); const x = c.getContext('2d');
   x.fillStyle = '#fff'; x.fillRect(0, 0, 512, 512); x.lineCap = 'round'; x.lineJoin = 'round';
   if (kind === 'foto') {
     const g = x.createRadialGradient(256, 200, 20, 256, 256, 330); g.addColorStop(0, '#fff'); g.addColorStop(0.5, '#999'); g.addColorStop(1, '#222'); x.fillStyle = g; x.fillRect(0, 0, 512, 512);
@@ -605,6 +691,7 @@ function demoImage(kind = 'dibujo') {
   return c;
 }
 
-return { traceLoops, makeQR, tube, threadProfile, shell, maskHeightMesh, translateMesh, mergeMeshes, signedDist, level, MESH_WARN, setQuality, QUALITY, FONTS, font, loadFont, measure, fitSize, frame, or, and, sub, inv, count, edt, dilate, erode, close, open, outline, ring, fillHoles, bbox, extreme, shift, mirrorTo, components,
+return { IS_DOM, canvas: mkCanvas, setFontSource, useManifold, hasCSG, csgFree, maskSolid, meshSolid, union, subtract, intersect, solidMesh, checkMesh, unionMeshes, renderThumb,
+  traceLoops, makeQR, tube, threadProfile, shell, maskHeightMesh, translateMesh, mergeMeshes, signedDist, level, MESH_WARN, setQuality, QUALITY, FONTS, font, loadFont, measure, fitSize, frame, or, and, sub, inv, count, edt, dilate, erode, close, open, outline, ring, fillHoles, bbox, extreme, shift, mirrorTo, components,
   SHAPES, shapePath, PATTERNS, snowflake, wifiIcon, star, regPoly, roundRect, maskToMesh, meshFromMasks, fixOrientation, lathe, heightMesh, newMesh, toSTL, to3MF, demoImage, rng };
 })();
