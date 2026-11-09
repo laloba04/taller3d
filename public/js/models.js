@@ -24,11 +24,11 @@ const L = (name, mask, z0, z1, color) => ({ name, mask, z0, z1, color });
 const LM = (name, mesh, color) => ({ name, mesh, color });
 function tdim(t, f, width, lh) { const m = measure(t, f, lh); const s = width / m.w; return { s, w: width, h: m.h * s }; }
 function imgFit(im, maxW, maxH) { const r = (im.width || 1) / (im.height || 1); let w = maxW, h = maxW / r; if (h > maxH) { h = maxH; w = maxH * r; } return { w, h }; }
-function holeTab(F, base, pos, d) {
+function holeTab(F, base, pos, d, ya, yb) {
   if (!pos || pos === 'no') return { base, hole: null, clear: null };
   const r = d / 2, R = r + 2.4; let c;
-  if (pos === 'izq') { const e = extreme(F, base, 'left'); c = [e[0] - r * 0.25, e[1]]; }
-  else if (pos === 'der') { const e = extreme(F, base, 'right'); c = [e[0] + r * 0.25, e[1]]; }
+  if (pos === 'izq') { const e = extreme(F, base, 'left', ya, yb); c = [e[0] - r * 0.25, e[1]]; }
+  else if (pos === 'der') { const e = extreme(F, base, 'right', ya, yb); c = [e[0] + r * 0.25, e[1]]; }
   else { const bb = bbox(F, base); const s = bb.bw; const e = extreme(F, base, 'top', bb.x0 + s * 0.38, bb.x1 - s * 0.38); c = [e[0], e[1] - r * 0.25]; }
   const hole = F.disk(c[0], c[1], r);
   const nb = sub(close(F, or(base, F.disk(c[0], c[1], R)), 1.2), hole);
@@ -886,20 +886,47 @@ function cabeza(F, p, cy, size) {
     case 'flor': { sil = F.shape('flor', 0, cy, size, size); capas.push({ name: 'Pétalos', mask: sub(sil, F.disk(0, cy, size * 0.2)), dz: 0.6, color: p.color2 || C.lila }, { name: 'Centro', mask: F.disk(0, cy, size * 0.18), dz: 1.2, color: C.oro });
       const pet = F.draw(c => { c.lineWidth = 0.7; for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4 + Math.PI / 8; c.beginPath(); c.moveTo(Math.cos(a) * size * 0.22, cy + Math.sin(a) * size * 0.22); c.lineTo(Math.cos(a) * size * 0.46, cy + Math.sin(a) * size * 0.46); c.stroke(); } });
       capas[0].mask = sub(capas[0].mask, pet); break; }
+    case 'lazo_rosa': { const z = cinta(F, cy, size); sil = z.sil; capas.push({ name: 'Lazo', mask: z.lazo, dz: 0.8, color: p.color2 || C.rosa }); break; }
     case 'esmalte': { sil = F.shape('esmalte', 0, cy, size * 0.62, size); const ic = p.texto ? p.texto : '♥'; const s = fitSize([ic], f, size * 0.42, size * 0.32); capas.push({ name: 'Bote', mask: sub(sil, F.rect(-size, cy - size, size, cy - size * 0.08)), dz: 0.6, color: p.color2 || C.rosa }, { name: 'Tapón', mask: and(sil, F.rect(-size, cy - size, size, cy - size * 0.1)), dz: 0.6, color: C.negro }, { name: 'Icono', mask: and(F.text([ic], f, s, 0, cy + size * 0.2), erode(F, sil, 1.6)), dz: 1.2, color: C.blanco }); break; }
     default: { sil = F.shape(p.cabeza, 0, cy, size, size); capas.push({ name: 'Figura', mask: sil, dz: 0.8, color: p.color2 || C.rosa }); if (p.texto) { const t = lines(p.texto, ''); const fit = FIT[p.cabeza] || [.6, .45]; const s = fitSize(t, f, size * fit[0], size * fit[1]); capas.push({ name: 'Texto', mask: and(F.text(t, f, s, 0, cy + size * (fit[3] || 0)), erode(F, sil, 1.2)), dz: 1.4, color: C.blanco }); } }
   }
   return { sil, capas };
 }
+/* lazo solidario como cinta: bucle abierto, dos tiras cruzadas (la que baja hacia la derecha va por encima) y colas en uve.
+   Centrado en (0,cy); size = alto total. Devuelve la silueta y el lazo con la línea de separación en el cruce. */
+function cinta(F, cy, size) {
+  const k = size / 112, bw = 15;   /* unidades de diseño: 112 de alto, cinta de 15 de ancho */
+  const P = (x, y) => [x * k, cy + y * k];
+  const tiraA = c => { c.moveTo(...P(-31, 54)); c.lineTo(...P(13, -8)); c.bezierCurveTo(...P(28, -29), ...P(25, -54), ...P(0, -54)); };
+  const tiraB = c => { c.moveTo(...P(0, -54)); c.bezierCurveTo(...P(-25, -54), ...P(-28, -29), ...P(-13, -8)); c.lineTo(...P(31, 54)); };
+  const trazo = (fn) => F.draw(c => { c.lineWidth = bw * k; c.lineCap = 'butt'; c.lineJoin = 'round'; c.beginPath(); fn(c); c.stroke(); });
+  /* colas en uve: muesca triangular en cada extremo */
+  const uve = F.draw(c => { for (const [ex, ey, fx, fy] of [[-31, 54, 13, -8], [31, 54, -13, -8]]) {
+    const L = Math.hypot(ex - fx, ey - fy), dx = (ex - fx) / L, dy = (ey - fy) / L, nx = -dy, ny = dx, h = bw * 0.62;
+    c.beginPath(); c.moveTo(...P(ex + nx * h + dx * 2, ey + ny * h + dy * 2)); c.lineTo(...P(ex - dx * 7.5, ey - dy * 7.5)); c.lineTo(...P(ex - nx * h + dx * 2, ey - ny * h + dy * 2)); c.closePath(); c.fill(); } });
+  const A = sub(trazo(tiraA), uve), B = sub(trazo(tiraB), uve);
+  /* la separación solo en el cruce: el tramo recto de la tira de encima */
+  const recto = sub(trazo(c => { c.moveTo(...P(-13, -8)); c.lineTo(...P(31, 54)); }), uve);
+  const lazo = or(sub(A, dilate(F, recto, 0.6)), B);
+  return { sil: or(A, B), lazo };
+}
 function gAbrelatas2(p) {
   const size = p.tam, aR = p.anchoR || 16, Wb = aR + 4.4, Lb = (p.fondoR || 16) + 6; const F = frame(Math.max(size + 2 * p.borde, Wb) + 16, size + Lb + 2 * p.borde + 20);
-  const cy = -Lb / 2 - 2; const hd = cabeza(F, p, cy, size); const outline = K.fillHoles(F, close(F, dilate(F, hd.sil, p.borde), 2));
-  const eb = extreme(F, outline, 'bottom'); const dir = eb[1] < cy ? -1 : 1; const yB = eb[1] + dir * (p.fondoR || 16); const yA = cy;
-  const block = F.draw(c => { c.beginPath(); K.roundRect(c, -Wb / 2, Math.min(yA, yB), Wb, Math.abs(yB - yA), 2.5); c.fill(); });
-  let base = close(F, or(outline, block), 1.5); const h = holeTab(F, base, 'arriba', 4); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
+  const arriba = p.posR === 'arriba';
+  const cy = arriba ? 0 : -Lb / 2 - 2; const hd = cabeza(F, p, cy, size); const outline = K.fillHoles(F, close(F, dilate(F, hd.sil, p.borde), 2));
+  let base, yB, dir;
+  if (arriba) {
+    /* bloque escondido detrás de la figura; solo asoma la boca de la ranura por arriba */
+    const et = extreme(F, outline, 'top'); yB = et[1] - 0.6; dir = -1;
+    base = close(F, or(outline, F.draw(c => { c.beginPath(); K.roundRect(c, -Wb / 2, yB, Wb, Lb, 5); c.fill(); })), 1.5);
+  } else {
+    const eb = extreme(F, outline, 'bottom'); dir = eb[1] < cy ? -1 : 1; yB = eb[1] + dir * (p.fondoR || 16);
+    const yA = cy; base = close(F, or(outline, F.draw(c => { c.beginPath(); K.roundRect(c, -Wb / 2, Math.min(yA, yB), Wb, Math.abs(yB - yA), 2.5); c.fill(); })), 1.5);
+  }
+  const bb0 = bbox(F, outline); const h = arriba ? holeTab(F, base, 'izq', 4, bb0.y0, bb0.y0 + bb0.bh * 0.4) : holeTab(F, base, 'arriba', 4); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
   if (p.circR) base = sub(base, F.disk(0, yB, aR * 0.28)); const yP = yB - dir * p.fondoR; const pocket = F.rect(-aR / 2, Math.min(yP, yB + dir * 3), aR / 2, Math.max(yP, yB + dir * 3), 0.8);
   const ab = abreCapas(F, base, pocket, p, p.color1 || C.blanco, p.nfc ? F.disk(0, cy, p.dNfc / 2 + 0.3) : null); const g = ab.T; const layers = ab.layers;
-  const first = new Set(['Imagen', 'Pétalos', 'Bote', 'Figura', 'Tapón']); const top = Math.max(...hd.capas.filter(cp => first.has(cp.name)).map(cp => cp.dz), 0);
+  const first = new Set(['Imagen', 'Pétalos', 'Bote', 'Figura', 'Tapón', 'Lazo']); const top = Math.max(...hd.capas.filter(cp => first.has(cp.name)).map(cp => cp.dz), 0);
   for (const cp of hd.capas) { const m = cl(and(cp.mask, erode(F, outline, 0.4))); if (!K.count(m)) continue; if (first.has(cp.name)) layers.push(L(cp.name, m, g, g + cp.dz, cp.color)); else layers.push(L(cp.name, m, g + top, g + top + cp.dz * 0.6, cp.color)); }
   return { F, layers, note: NOTA_ABRE + ab.nota };
 }
@@ -1222,9 +1249,9 @@ for (const [id, nm, forma, tam, alto] of [['tb-corazon', 'Corazón termoformado'
 // Abrelatas con cabeza personalizable
 const ABR = (o = {}) => [sel('cabeza', 'Diseño', o.cabeza || 'imagen', { imagen: 'Imagen', texto: 'Texto en placa', flor: 'Flor multicolor', esmalte: 'Bote de esmalte', lazo_rosa: 'Lazo solidario', corazon: 'Corazón', estrella: 'Estrella', circulo: 'Círculo' }),
   img('img', 'Imagen', o.demo || 'logo', { show: p => p.cabeza === 'imagen' }), { ...UMB, show: p => p.cabeza === 'imagen' }, txt('texto', 'Texto / icono', o.texto ?? '', { show: p => p.cabeza !== 'imagen' && p.cabeza !== 'flor' && p.cabeza !== 'lazo_rosa' }), fnt('fuente', 'Fuente', o.fuente || 'righteous', { show: p => p.cabeza !== 'imagen' && p.cabeza !== 'flor' && p.cabeza !== 'lazo_rosa' }),
-  num('tam', 'Tamaño de la figura', o.tam || 34, 20, 60), num('borde', 'Borde', o.borde ?? 2, 0.6, 5, 0.2), chk('nfc', 'Hueco para NFC', !!o.nfc), num('dNfc', 'Ø etiqueta NFC', 20, 12, 30, 1, { show: p => p.nfc }), num('eNfc', 'Grosor hueco NFC', 1, 0.4, 2, 0.1, { show: p => p.nfc }), ...RANURA()];
+  num('tam', 'Tamaño de la figura', o.tam || 34, 20, 60), num('borde', 'Borde', o.borde ?? 2, 0.6, 5, 0.2), chk('nfc', 'Hueco para NFC', !!o.nfc), num('dNfc', 'Ø etiqueta NFC', 20, 12, 30, 1, { show: p => p.nfc }), num('eNfc', 'Grosor hueco NFC', 1, 0.4, 2, 0.1, { show: p => p.nfc }), sel('posR', 'Posición de la ranura', o.posR || 'abajo', { abajo: 'Abajo, en una lengüeta', arriba: 'Arriba, escondida detrás de la figura' }), ...RANURA()];
 M('abre-gen', 'Generador de abrelatas', 'Llavero abrelatas con cualquier imagen, texto o figura.', ABR(), p => gAbrelatas2(p));
-M('abre-lazo', 'Abrelatas lazo solidario', 'El lazo de octubre rosa.', ABR({ cabeza: 'lazo_rosa', tam: 38 }), p => gAbrelatas2({ ...p, color2: C.rosa }));
+M('abre-lazo', 'Abrelatas lazo solidario', 'El lazo de octubre rosa.', ABR({ cabeza: 'lazo_rosa', tam: 52, posR: 'arriba' }), p => gAbrelatas2({ ...p, color2: C.rosa }));
 M('abre-rect', 'Abrelatas rectángulo', 'Placa con tu @ o tu nombre.', ABR({ cabeza: 'texto', texto: '@tumarca', tam: 40 }), p => gAbrelatas2(p));
 M('abre-flor', 'Abrelatas flor multicolor', 'Flor con pétalos y centro de colores.', ABR({ cabeza: 'flor', tam: 36 }), p => gAbrelatas2({ ...p, color2: C.lila }));
 M('abre-borde', 'Abrelatas con borde', 'Texto sobre placa con borde de otro color.', ABR({ cabeza: 'texto', texto: '@tumarca', borde: 3, tam: 40 }), p => gAbrelatas2({ ...p, color1: C.rosa, color2: C.blanco, color3: C.rosa }));
