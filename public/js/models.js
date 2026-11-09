@@ -732,14 +732,23 @@ function sampler(F, m, blur = true) {
 /* rodillo de textura */
 function gRodillo(p) {
   const R = p.diametro / 2, Lr = p.largo, C0 = 2 * Math.PI * R, band = 6;
-  const F = frame(C0, Lr, { margin: 1, maxPx: 800, res: 2.6 });
+  const F = frame(C0, Lr, { margin: 1, maxPx: 1000, res: 4 });
   let D;
   if (p.diseno === 'texto') { const f = font(p.fuente); const t = lines(p.texto, 'Hecho a mano'); const s = fitSize(t, f, C0 * 0.85, (Lr - 2 * band) * 0.8); D = F.text(t, f, s, 0, 0, { mirror: true }); }
-  else if (p.diseno === 'imagen') { const ss = imgFit(p.img, C0 * 0.85, (Lr - 2 * band) * 0.85); D = F.image(p.img, 0, 0, ss.w, ss.h, { thr: p.umbral, mirror: true }); }
+  else if (p.diseno === 'imagen') {
+    const Hz = Lr - 2 * band, ar = (p.img.height || 1) / (p.img.width || 1);
+    if (p.cubrir === 'repetir') {
+      /* número entero de copias en la vuelta para que no quede costura; en vertical, las filas que quepan */
+      const n = Math.max(1, Math.round(C0 / p.tamImg)), tw = C0 / n, th = tw * ar; const tiles = [];
+      const rows = Math.ceil(Hz / th / 2) + 1; for (let j = -rows; j <= rows; j++) for (let i = 0; i < n; i++) tiles.push([-C0 / 2 + tw * (i + 0.5), j * th, tw, th]);
+      D = F.image(p.img, 0, 0, 0, 0, { thr: p.umbral, mirror: true, tiles });
+    } else if (p.cubrir === 'estirar') D = F.image(p.img, 0, 0, C0, Hz, { thr: p.umbral, mirror: true });
+    else { const ss = imgFit(p.img, C0 * 0.85, Hz * 0.85); D = F.image(p.img, 0, 0, ss.w, ss.h, { thr: p.umbral, mirror: true }); }
+  }
   else D = F.pattern(p.patron, p.sep, p.grosorLinea, p.semilla);
   D = and(D, F.rect(-C0, -Lr / 2 + band, C0, Lr / 2 - band));
   const smp = sampler(F, D); const sign = p.estilo === 'hundido' ? -1 : 1; const Rb = sign > 0 ? R : R + p.relieve;
-  const z0 = 0; const segs = Math.min(720, Math.round(C0 * 2.6)), nz = Math.round(Lr * 2.6);
+  const z0 = 0; const segs = Math.min(900, Math.round(C0 * 4)), nz = Math.min(800, Math.round(Lr * 4));
   const m = K.tube((a, z) => Rb + sign * p.relieve * smp(a / (2 * Math.PI) * C0 - C0 / 2, z - Lr / 2), () => p.eje / 2 + 0.15, z0, Lr, segs, nz, 0, 0);
   const layers = [LM('Rodillo', m, C.lila)];
   if (p.guias) { for (const [i, x] of [[0, Rb + p.masa + 8], [1, -(Rb + p.masa + 8)]]) { const g = K.newMesh(); K.lathe([[Rb + 0.25, 0], [Rb + 0.25 + p.masa + 1.6, 0], [Rb + 0.25 + p.masa + 1.6, band - 1], [Rb + 0.25, band - 1]], x * 1.2 + (i ? -R : R), 0, 128, g); layers.push(LM('Guía de grosor ' + (i + 1), g, C.gris)); } }
@@ -1238,6 +1247,8 @@ M('termo-copo', 'Molde de termoformado: copo', 'Bolsita de malla con un copo de 
 const ROD = (o = {}) => [num('diametro', 'Diámetro', 30, 15, 60), num('largo', 'Largo', 100, 40, 200), sel('diseno', 'Diseño', o.diseno || 'patron', { patron: 'Patrón', texto: 'Texto', imagen: 'Imagen' }),
   { ...pat(o.patron || 'mosaico'), show: p => p.diseno === 'patron' }, num('sep', 'Tamaño del patrón', o.sep || 8, 3, 25, 0.5, { show: p => p.diseno === 'patron' }), num('grosorLinea', 'Grosor de línea', 1.2, 0.6, 3, 0.1, { show: p => p.diseno === 'patron' }), cnt('semilla', 'Variante', 4, 1, 99, { show: p => p.diseno === 'patron' }),
   txt('texto', 'Texto', 'Hecho a mano', { show: p => p.diseno === 'texto' }), fnt('fuente', 'Fuente', 'pacifico', { show: p => p.diseno === 'texto' }), img('img', 'Imagen', 'dibujo', { show: p => p.diseno === 'imagen' }), { ...UMB, show: p => p.diseno === 'imagen' },
+  sel('cubrir', 'Cómo poner la imagen', 'una', { una: 'Una vez, en el centro', repetir: 'Repetida, cubriendo todo el rodillo', estirar: 'Estirada a todo el rodillo' }, { show: p => p.diseno === 'imagen' }),
+  num('tamImg', 'Ancho de cada repetición', 30, 5, 80, 0.5, { show: p => p.diseno === 'imagen' && p.cubrir === 'repetir' }),
   sel('estilo', 'Relieve', 'relieve', { relieve: 'En relieve', hundido: 'Hundido' }), num('relieve', 'Profundidad', 1.2, 0.4, 3, 0.1), num('eje', 'Ø del eje', 8, 4, 14, 0.5), chk('guias', 'Guías de grosor en los extremos', true), num('masa', 'Grosor de la masa', 4, 1, 10, 0.5, { show: p => p.guias })];
 M('rodillo', 'Rodillo de textura', 'Rodillo para marcar arcilla, fondant o masa con un patrón, texto o dibujo.', ROD(), p => gRodillo(p));
 M('rodillo-mosaico', 'Rodillo de textura: mosaico', 'Mosaico irregular continuo.', ROD({ patron: 'mosaico', sep: 7 }), p => gRodillo(p));

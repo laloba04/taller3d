@@ -124,7 +124,8 @@ function frame(W, H, opt = {}) {
   F.image = (img, cx, cy, iw, ih, o = {}) => {
     const { ctx } = F.canvas(); ctx.setTransform(res, 0, 0, res, w / 2, h / 2);
     if (o.mirror) { ctx.translate(cx, 0); ctx.scale(-1, 1); ctx.translate(-cx, 0); }
-    ctx.drawImage(img, cx - iw / 2, cy - ih / 2, iw, ih);
+    /* o.tiles: [[cx, cy, w, h], …] para repetir la imagen (mosaico) */
+    if (o.tiles) for (const t of o.tiles) ctx.drawImage(img, t[0] - t[2] / 2, t[1] - t[3] / 2, t[2], t[3]); else ctx.drawImage(img, cx - iw / 2, cy - ih / 2, iw, ih);
     const d = ctx.getImageData(0, 0, w, h).data; const m = new Uint8Array(w * h);
     let mode = o.mode || 'auto';
     if (mode === 'auto') mode = imgHasAlpha(img) ? 'alpha' : 'dark';
