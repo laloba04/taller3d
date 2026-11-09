@@ -920,9 +920,12 @@ function cinta(F, cy, size) {
   /* sitio para la anilla: en mitad de la tira izquierda del bucle */
   return { sil: or(A, B), lazo, agujero: P(-26, -38) };
 }
-/* anilla arriba en una pestaña que no se come la figura */
-function anillaArriba(F, base, bb) {
-  const r = 2, R = r + 2.4; const s = bb.bw; const e = extreme(F, base, 'top', bb.x0 + s * 0.38, bb.x1 - s * 0.38); const c = [e[0], e[1] - r - 0.6];
+/* anilla en una pestaña por fuera del borde (no recorta la figura).
+   lado: arriba | izq | der | abajo; mov: -100..100 % para desplazarla a lo largo de ese borde */
+function anillaFuera(F, base, bb, lado, mov = 0) {
+  const r = 2, R = r + 2.4, k = Math.max(-1, Math.min(1, mov / 100)) * 0.85; let c;
+  if (lado === 'arriba' || lado === 'abajo') { const x = bb.cx + k * bb.bw / 2; const e = extreme(F, base, lado === 'arriba' ? 'top' : 'bottom', x - 1, x + 1); c = [e[0], e[1] + (lado === 'arriba' ? -1 : 1) * (r + 0.6)]; }
+  else { const y = bb.cy + k * bb.bh / 2; const e = extreme(F, base, lado === 'izq' ? 'left' : 'right', y - 1, y + 1); c = [e[0] + (lado === 'izq' ? -1 : 1) * (r + 0.6), e[1]]; }
   const hole = F.disk(c[0], c[1], r);
   return { base: sub(close(F, or(base, F.disk(c[0], c[1], R)), 1.2), hole), hole, clear: F.disk(c[0], c[1], r + 0.6) };
 }
@@ -957,9 +960,11 @@ function gAbrelatas2(p) {
   if (!pl) { pl = plan('abajo'); aviso = ' Esta figura es estrecha por arriba y la ranura no cabe escondida detrás: se ha puesto abajo.'; }
   const { cy, hd, outline, M, u } = pl; let base = pl.base;
   const bb0 = bbox(F, outline);
-  /* anilla: dentro de la figura si tiene sitio (lazo con ranura arriba), a la izquierda si la ranura va arriba, si no arriba */
-  const h = pl.pos === 'arriba' && hd.agujero ? { base: sub(base, F.disk(hd.agujero[0], hd.agujero[1], 2)), clear: F.disk(hd.agujero[0], hd.agujero[1], 2.3) }
-    : pl.pos === 'arriba' ? holeTab(F, base, 'izq', 4, bb0.y0, bb0.y0 + bb0.bh * 0.4) : anillaArriba(F, base, bb0);
+  /* anilla: automática (arriba, o a la izquierda si la ranura va arriba; en el lazo, dentro de la cinta) o donde se elija */
+  const lado = !p.anilla || p.anilla === 'auto' ? (pl.pos === 'arriba' ? 'izq' : 'arriba') : p.anilla;
+  const h = lado === 'no' ? { base, clear: null }
+    : (!p.anilla || p.anilla === 'auto') && pl.pos === 'arriba' && hd.agujero ? { base: sub(base, F.disk(hd.agujero[0], hd.agujero[1], 2)), clear: F.disk(hd.agujero[0], hd.agujero[1], 2.3) }
+    : anillaFuera(F, base, bb0, lado, p.movAn || 0);
   base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
   if (p.circR) base = sub(base, F.disk(M[0], M[1], aR * 0.28));
   /* ranura: desde 3 mm fuera de la boca hasta la profundidad pedida, hacia dentro */
@@ -1291,7 +1296,7 @@ for (const [id, nm, forma, tam, alto] of [['tb-corazon', 'Corazón termoformado'
 // Abrelatas con cabeza personalizable
 const ABR = (o = {}) => [sel('cabeza', 'Diseño', o.cabeza || 'imagen', { imagen: 'Imagen', texto: 'Texto en placa', flor: 'Flor multicolor', esmalte: 'Bote de esmalte', lazo_rosa: 'Lazo solidario', corazon: 'Corazón', estrella: 'Estrella', circulo: 'Círculo' }),
   img('img', 'Imagen', o.demo || 'logo', { show: p => p.cabeza === 'imagen' }), { ...UMB, show: p => p.cabeza === 'imagen' }, txt('texto', 'Texto / icono', o.texto ?? '', { show: p => p.cabeza !== 'imagen' && p.cabeza !== 'flor' && p.cabeza !== 'lazo_rosa' }), fnt('fuente', 'Fuente', o.fuente || 'righteous', { show: p => p.cabeza !== 'imagen' && p.cabeza !== 'flor' && p.cabeza !== 'lazo_rosa' }),
-  num('tam', 'Tamaño de la figura', o.tam || 34, 20, 60), num('borde', 'Borde', o.borde ?? 2, 0.6, 5, 0.2), chk('nfc', 'Hueco para NFC', !!o.nfc), num('dNfc', 'Ø etiqueta NFC', 20, 12, 30, 1, { show: p => p.nfc }), num('eNfc', 'Grosor hueco NFC', 1, 0.4, 2, 0.1, { show: p => p.nfc }), sel('posR', 'Posición de la ranura', o.posR || 'abajo', { abajo: 'Abajo, en una lengüeta', arriba: 'Arriba, escondida detrás de la figura', izq: 'A la izquierda', der: 'A la derecha' }), ...RANURA()];
+  num('tam', 'Tamaño de la figura', o.tam || 34, 20, 60), num('borde', 'Borde', o.borde ?? 2, 0.6, 5, 0.2), chk('nfc', 'Hueco para NFC', !!o.nfc), num('dNfc', 'Ø etiqueta NFC', 20, 12, 30, 1, { show: p => p.nfc }), num('eNfc', 'Grosor hueco NFC', 1, 0.4, 2, 0.1, { show: p => p.nfc }), sel('anilla', 'Anilla', 'auto', { auto: 'Automática', arriba: 'Arriba', izq: 'A la izquierda', der: 'A la derecha', abajo: 'Abajo', no: 'Sin anilla' }), num('movAn', 'Mover anilla', 0, -100, 100, 5, { unit: '%', show: p => p.anilla !== 'no' }), sel('posR', 'Posición de la ranura', o.posR || 'abajo', { abajo: 'Abajo, en una lengüeta', arriba: 'Arriba, escondida detrás de la figura', izq: 'A la izquierda', der: 'A la derecha' }), ...RANURA()];
 M('abre-gen', 'Generador de abrelatas', 'Llavero abrelatas con cualquier imagen, texto o figura.', ABR(), p => gAbrelatas2(p));
 M('abre-lazo', 'Abrelatas lazo solidario', 'El lazo de octubre rosa.', ABR({ cabeza: 'lazo_rosa', tam: 52, posR: 'arriba' }), p => gAbrelatas2({ ...p, color2: C.rosa }));
 M('abre-rect', 'Abrelatas rectángulo', 'Placa con tu @ o tu nombre.', ABR({ cabeza: 'texto', texto: '@tumarca', tam: 40 }), p => gAbrelatas2(p));
