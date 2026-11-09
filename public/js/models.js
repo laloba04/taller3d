@@ -927,32 +927,44 @@ function anillaArriba(F, base, bb) {
   return { base: sub(close(F, or(base, F.disk(c[0], c[1], R)), 1.2), hole), hole, clear: F.disk(c[0], c[1], r + 0.6) };
 }
 function gAbrelatas2(p) {
-  const size = p.tam, aR = p.anchoR || 16, Wb = aR + 4.4, Lb = (p.fondoR || 16) + 6; const F = frame(Math.max(size + 2 * p.borde, Wb) + 16, size + Lb + 2 * p.borde + 20);
-  /* ranura arriba (escondida detrás de la figura) o abajo (en una lengüeta) */
-  const plan = (arriba) => {
-    const cy = arriba ? 0 : -Lb / 2 - 2; const hd = cabeza(F, p, cy, size); const outline = K.fillHoles(F, close(F, dilate(F, hd.sil, p.borde), 2));
-    if (arriba) {
-      /* la ranura entra directamente por el borde de arriba: la silueta no cambia */
-      const et = extreme(F, outline, 'top'); const yB = et[1];
-      const block = F.draw(c => { c.beginPath(); K.roundRect(c, -Wb / 2, yB, Wb, Lb, 1); c.fill(); });
-      /* zona que necesita la ranura y que no es figura: si es mucha, la figura es estrecha por arriba */
-      const fuera = K.count(sub(block, outline)) / Math.max(1, K.count(block));
-      return { cy, hd, outline, yB, dir: -1, base: outline, fuera };
+  const size = p.tam, aR = p.anchoR || 16, Wb = aR + 4.4, fondo = p.fondoR || 16, Lb = fondo + 6, ext = Math.max(6, fondo * 0.45);
+  const F = frame(Math.max(size + 2 * p.borde, Wb) + 2 * ext + 20, size + Lb + 2 * p.borde + 20);
+  /* rectángulo [x0,x1]×[y0,y1] en cualquier orden */
+  const caja = (x0, y0, x1, y1, r) => F.draw(c => { c.beginPath(); K.roundRect(c, Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0), r); c.fill(); });
+  /* boca de la ranura M (en el borde) y dirección u hacia dentro.
+     arriba / izquierda / derecha: escondida, entrando desde el borde de la figura (si cabe);
+     abajo, o de lado cuando no cabe: en una lengüeta corta que sobresale ext mm */
+  const plan = (pos) => {
+    const cy = pos === 'abajo' ? -Lb / 2 - 2 : 0; const hd = cabeza(F, p, cy, size); const outline = K.fillHoles(F, close(F, dilate(F, hd.sil, p.borde), 2));
+    if (pos === 'abajo') {
+      const yB = extreme(F, outline, 'bottom')[1] + ext; const yT = Math.min(cy, yB - fondo - 3);
+      return { pos, cy, hd, outline, M: [0, yB], u: [0, -1], base: close(F, or(outline, caja(-Wb / 2, yT, Wb / 2, yB, 2.5)), 1.5) };
     }
-    /* la lengüeta solo sobresale lo justo: el resto de la ranura va por debajo de la figura */
-    const eb = extreme(F, outline, 'bottom'); const dir = eb[1] < cy ? -1 : 1; const yB = eb[1] + dir * Math.max(6, (p.fondoR || 16) * 0.45);
-    const yT = dir > 0 ? Math.min(cy, yB - (p.fondoR || 16) - 3) : Math.max(cy, yB + (p.fondoR || 16) + 3);
-    return { cy, hd, outline, yB, dir, base: close(F, or(outline, F.draw(c => { c.beginPath(); K.roundRect(c, -Wb / 2, Math.min(yT, yB), Wb, Math.abs(yB - yT), 2.5); c.fill(); })), 1.5) };
+    const lado = pos === 'izq' ? -1 : 1;
+    const M = pos === 'arriba' ? [0, extreme(F, outline, 'top')[1]] : [extreme(F, outline, pos === 'izq' ? 'left' : 'right', cy - Wb / 2, cy + Wb / 2)[0], cy];
+    const u = pos === 'arriba' ? [0, 1] : [-lado, 0];
+    /* paredes a los dos lados de la ranura (sin contar los 3 primeros mm de la boca): tienen que caer dentro de la figura */
+    const d0 = 3, paredes = pos === 'arriba'
+      ? sub(caja(-Wb / 2, M[1] + d0, Wb / 2, M[1] + fondo, 0), caja(-aR / 2, M[1], aR / 2, M[1] + fondo + 1, 0))
+      : sub(caja(M[0] - lado * d0, cy - Wb / 2, M[0] - lado * fondo, cy + Wb / 2, 0), caja(M[0], cy - aR / 2, M[0] - lado * (fondo + 1), cy + aR / 2, 0));
+    const fuera = K.count(sub(paredes, outline)) / Math.max(1, K.count(paredes));
+    if (fuera <= 0.1) return { pos, cy, hd, outline, M, u, base: outline, escondida: true };
+    if (pos === 'arriba') return null;
+    const Mx = M[0] + lado * ext, xT = lado < 0 ? Math.max(0, Mx + fondo + 3) : Math.min(0, Mx - fondo - 3);
+    return { pos, cy, hd, outline, M: [Mx, cy], u, base: close(F, or(outline, caja(xT, cy - Wb / 2, Mx, cy + Wb / 2, 2.5)), 1.5) };
   };
-  let arriba = p.posR === 'arriba', aviso = '';
-  let pl = plan(arriba);
-  if (arriba && pl.fuera > 0.25) { arriba = false; pl = plan(false); aviso = ' Esta figura es estrecha por arriba y la ranura no cabe escondida detrás: se ha puesto abajo.'; }
-  const { cy, hd, outline, yB, dir } = pl; let base = pl.base;
+  let aviso = ''; let pl = plan(p.posR || 'abajo');
+  if (!pl) { pl = plan('abajo'); aviso = ' Esta figura es estrecha por arriba y la ranura no cabe escondida detrás: se ha puesto abajo.'; }
+  const { cy, hd, outline, M, u } = pl; let base = pl.base;
   const bb0 = bbox(F, outline);
-  /* anilla: dentro de la figura si tiene sitio (lazo), si no en una pestaña */
-  const h = arriba && hd.agujero ? { base: sub(base, F.disk(hd.agujero[0], hd.agujero[1], 2)), clear: F.disk(hd.agujero[0], hd.agujero[1], 2.3) }
-    : arriba ? holeTab(F, base, 'izq', 4, bb0.y0, bb0.y0 + bb0.bh * 0.4) : anillaArriba(F, base, bb0); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
-  if (p.circR) base = sub(base, F.disk(0, yB, aR * 0.28)); const yP = yB - dir * p.fondoR; const pocket = F.rect(-aR / 2, Math.min(yP, yB + dir * 3), aR / 2, Math.max(yP, yB + dir * 3), 0.8);
+  /* anilla: dentro de la figura si tiene sitio (lazo con ranura arriba), a la izquierda si la ranura va arriba, si no arriba */
+  const h = pl.pos === 'arriba' && hd.agujero ? { base: sub(base, F.disk(hd.agujero[0], hd.agujero[1], 2)), clear: F.disk(hd.agujero[0], hd.agujero[1], 2.3) }
+    : pl.pos === 'arriba' ? holeTab(F, base, 'izq', 4, bb0.y0, bb0.y0 + bb0.bh * 0.4) : anillaArriba(F, base, bb0);
+  base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
+  if (p.circR) base = sub(base, F.disk(M[0], M[1], aR * 0.28));
+  /* ranura: desde 3 mm fuera de la boca hasta la profundidad pedida, hacia dentro */
+  const A = [M[0] - u[0] * 3, M[1] - u[1] * 3], B = [M[0] + u[0] * fondo, M[1] + u[1] * fondo];
+  const pocket = u[0] ? F.rect(A[0], M[1] - aR / 2, B[0], M[1] + aR / 2, 0.8) : F.rect(M[0] - aR / 2, A[1], M[0] + aR / 2, B[1], 0.8);
   const ab = abreCapas(F, base, pocket, p, p.color1 || C.blanco, p.nfc ? F.disk(0, cy, p.dNfc / 2 + 0.3) : null); const g = ab.T; const layers = ab.layers;
   const first = new Set(['Imagen', 'Pétalos', 'Bote', 'Figura', 'Tapón', 'Lazo']); const top = Math.max(...hd.capas.filter(cp => first.has(cp.name)).map(cp => cp.dz), 0);
   for (const cp of hd.capas) { const m = cl(and(cp.mask, erode(F, outline, 0.4))); if (!K.count(m)) continue; if (first.has(cp.name)) layers.push(L(cp.name, m, g, g + cp.dz, cp.color)); else layers.push(L(cp.name, m, g + top, g + top + cp.dz * 0.6, cp.color)); }
@@ -1279,7 +1291,7 @@ for (const [id, nm, forma, tam, alto] of [['tb-corazon', 'Corazón termoformado'
 // Abrelatas con cabeza personalizable
 const ABR = (o = {}) => [sel('cabeza', 'Diseño', o.cabeza || 'imagen', { imagen: 'Imagen', texto: 'Texto en placa', flor: 'Flor multicolor', esmalte: 'Bote de esmalte', lazo_rosa: 'Lazo solidario', corazon: 'Corazón', estrella: 'Estrella', circulo: 'Círculo' }),
   img('img', 'Imagen', o.demo || 'logo', { show: p => p.cabeza === 'imagen' }), { ...UMB, show: p => p.cabeza === 'imagen' }, txt('texto', 'Texto / icono', o.texto ?? '', { show: p => p.cabeza !== 'imagen' && p.cabeza !== 'flor' && p.cabeza !== 'lazo_rosa' }), fnt('fuente', 'Fuente', o.fuente || 'righteous', { show: p => p.cabeza !== 'imagen' && p.cabeza !== 'flor' && p.cabeza !== 'lazo_rosa' }),
-  num('tam', 'Tamaño de la figura', o.tam || 34, 20, 60), num('borde', 'Borde', o.borde ?? 2, 0.6, 5, 0.2), chk('nfc', 'Hueco para NFC', !!o.nfc), num('dNfc', 'Ø etiqueta NFC', 20, 12, 30, 1, { show: p => p.nfc }), num('eNfc', 'Grosor hueco NFC', 1, 0.4, 2, 0.1, { show: p => p.nfc }), sel('posR', 'Posición de la ranura', o.posR || 'abajo', { abajo: 'Abajo, en una lengüeta', arriba: 'Arriba, escondida detrás de la figura' }), ...RANURA()];
+  num('tam', 'Tamaño de la figura', o.tam || 34, 20, 60), num('borde', 'Borde', o.borde ?? 2, 0.6, 5, 0.2), chk('nfc', 'Hueco para NFC', !!o.nfc), num('dNfc', 'Ø etiqueta NFC', 20, 12, 30, 1, { show: p => p.nfc }), num('eNfc', 'Grosor hueco NFC', 1, 0.4, 2, 0.1, { show: p => p.nfc }), sel('posR', 'Posición de la ranura', o.posR || 'abajo', { abajo: 'Abajo, en una lengüeta', arriba: 'Arriba, escondida detrás de la figura', izq: 'A la izquierda', der: 'A la derecha' }), ...RANURA()];
 M('abre-gen', 'Generador de abrelatas', 'Llavero abrelatas con cualquier imagen, texto o figura.', ABR(), p => gAbrelatas2(p));
 M('abre-lazo', 'Abrelatas lazo solidario', 'El lazo de octubre rosa.', ABR({ cabeza: 'lazo_rosa', tam: 52, posR: 'arriba' }), p => gAbrelatas2({ ...p, color2: C.rosa }));
 M('abre-rect', 'Abrelatas rectángulo', 'Placa con tu @ o tu nombre.', ABR({ cabeza: 'texto', texto: '@tumarca', tam: 40 }), p => gAbrelatas2(p));
