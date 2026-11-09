@@ -911,6 +911,12 @@ function cinta(F, cy, size) {
   /* sitio para la anilla: en mitad de la tira izquierda del bucle */
   return { sil: or(A, B), lazo, agujero: P(-26, -38) };
 }
+/* anilla arriba en una pestaña que no se come la figura */
+function anillaArriba(F, base, bb) {
+  const r = 2, R = r + 2.4; const s = bb.bw; const e = extreme(F, base, 'top', bb.x0 + s * 0.38, bb.x1 - s * 0.38); const c = [e[0], e[1] - r - 0.6];
+  const hole = F.disk(c[0], c[1], r);
+  return { base: sub(close(F, or(base, F.disk(c[0], c[1], R)), 1.2), hole), hole, clear: F.disk(c[0], c[1], r + 0.6) };
+}
 function gAbrelatas2(p) {
   const size = p.tam, aR = p.anchoR || 16, Wb = aR + 4.4, Lb = (p.fondoR || 16) + 6; const F = frame(Math.max(size + 2 * p.borde, Wb) + 16, size + Lb + 2 * p.borde + 20);
   /* ranura arriba (escondida detrás de la figura) o abajo (en una lengüeta) */
@@ -924,8 +930,10 @@ function gAbrelatas2(p) {
       const fuera = K.count(sub(block, outline)) / Math.max(1, K.count(block));
       return { cy, hd, outline, yB, dir: -1, base: outline, fuera };
     }
-    const eb = extreme(F, outline, 'bottom'); const dir = eb[1] < cy ? -1 : 1; const yB = eb[1] + dir * (p.fondoR || 16);
-    return { cy, hd, outline, yB, dir, base: close(F, or(outline, F.draw(c => { c.beginPath(); K.roundRect(c, -Wb / 2, Math.min(cy, yB), Wb, Math.abs(yB - cy), 2.5); c.fill(); })), 1.5) };
+    /* la lengüeta solo sobresale lo justo: el resto de la ranura va por debajo de la figura */
+    const eb = extreme(F, outline, 'bottom'); const dir = eb[1] < cy ? -1 : 1; const yB = eb[1] + dir * Math.max(6, (p.fondoR || 16) * 0.45);
+    const yT = dir > 0 ? Math.min(cy, yB - (p.fondoR || 16) - 3) : Math.max(cy, yB + (p.fondoR || 16) + 3);
+    return { cy, hd, outline, yB, dir, base: close(F, or(outline, F.draw(c => { c.beginPath(); K.roundRect(c, -Wb / 2, Math.min(yT, yB), Wb, Math.abs(yB - yT), 2.5); c.fill(); })), 1.5) };
   };
   let arriba = p.posR === 'arriba', aviso = '';
   let pl = plan(arriba);
@@ -934,7 +942,7 @@ function gAbrelatas2(p) {
   const bb0 = bbox(F, outline);
   /* anilla: dentro de la figura si tiene sitio (lazo), si no en una pestaña */
   const h = arriba && hd.agujero ? { base: sub(base, F.disk(hd.agujero[0], hd.agujero[1], 2)), clear: F.disk(hd.agujero[0], hd.agujero[1], 2.3) }
-    : arriba ? holeTab(F, base, 'izq', 4, bb0.y0, bb0.y0 + bb0.bh * 0.4) : holeTab(F, base, 'arriba', 4); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
+    : arriba ? holeTab(F, base, 'izq', 4, bb0.y0, bb0.y0 + bb0.bh * 0.4) : anillaArriba(F, base, bb0); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
   if (p.circR) base = sub(base, F.disk(0, yB, aR * 0.28)); const yP = yB - dir * p.fondoR; const pocket = F.rect(-aR / 2, Math.min(yP, yB + dir * 3), aR / 2, Math.max(yP, yB + dir * 3), 0.8);
   const ab = abreCapas(F, base, pocket, p, p.color1 || C.blanco, p.nfc ? F.disk(0, cy, p.dNfc / 2 + 0.3) : null); const g = ab.T; const layers = ab.layers;
   const first = new Set(['Imagen', 'Pétalos', 'Bote', 'Figura', 'Tapón', 'Lazo']); const top = Math.max(...hd.capas.filter(cp => first.has(cp.name)).map(cp => cp.dz), 0);
