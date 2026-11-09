@@ -15,16 +15,71 @@ async function saveFile(name, blob) {
 
 /* ---------- navegación ---------- */
 function route() {
-  const h = location.hash.slice(1);
+  const h = location.hash.slice(1); setNav(h);
   if (h.startsWith('m-') && MODELS[h.slice(2)] && !MODELS[h.slice(2)].soon) return openModel(h.slice(2));
   const c = CATEGORIES.find(c => c.id === h); if (c) return openCat(c);
+  if (h === 'modelos') return openAll(); if (h === 'favoritos') return openFav(); if (h === 'herramientas') return openTools();
+  if (h === 'svg') return openSvg(); if (h === 'generador-qr') return openQrTool();
   openHome();
 }
-function show(id) { for (const v of ['view-home', 'view-cat', 'view-editor']) $('#' + v).classList.toggle('hidden', v !== id); window.scrollTo(0, 0); }
+function setNav(h) { const map = { modelos: 'modelos', favoritos: 'favoritos', herramientas: 'herramientas', svg: 'herramientas', 'generador-qr': 'herramientas', pruebas: 'herramientas' }; const k = map[h] || (h === '' || h === 'inicio' ? 'inicio' : ''); document.querySelectorAll('.mainnav a').forEach(a => a.classList.toggle('on', a.dataset.nav === k)); }
+function show(id) { for (const v of ['view-home', 'view-cat', 'view-page', 'view-editor']) $('#' + v).classList.toggle('hidden', v !== id); window.scrollTo(0, 0); }
+/* favoritos (solo en este navegador) */
+function favs() { try { return new Set(JSON.parse(localStorage.getItem('t3d-fav') || '[]')); } catch (e) { return new Set(); } }
+function toggleFav(id) { const f = favs(); f.has(id) ? f.delete(id) : f.add(id); try { localStorage.setItem('t3d-fav', JSON.stringify([...f])); } catch (e) { } return f.has(id); }
+function uniqueModels() { const seen = new Set(), out = []; for (const c of CATEGORIES.filter(c => !c.hidden)) for (const id of c.models) if (!seen.has(id) && MODELS[id] && !MODELS[id].soon) { seen.add(id); out.push({ m: MODELS[id], cat: c.id }); } return out; }
+function page(title, desc) { show('view-page'); stopViewer(); const v = $('#view-page'); v.innerHTML = ''; const head = el('section', { class: 'cat-head' }, el('h1', {}, title), el('p', {}, desc)); v.append(head); return v; }
+function openAll() {
+  crumbs([{ label: 'Inicio', href: '#inicio' }, { label: 'Modelos' }]); const all = uniqueModels(); const v = page('Todos los modelos', all.length + ' modelos para personalizar e imprimir.');
+  const q = el('input', { type: 'search', placeholder: 'Buscar modelo…' }); const chips = el('div', { class: 'chips' }); const grid = el('section', { class: 'grid models' }); let cat = '';
+  const draw = () => { grid.innerHTML = ''; const t = q.value.trim().toLowerCase(); const list = all.filter(x => (!cat || CATEGORIES.find(c => c.id === cat).models.includes(x.m.id)) && (!t || (x.m.name + ' ' + x.m.desc).toLowerCase().includes(t)));
+    list.forEach(x => grid.append(modelCard(x.m))); if (!list.length) grid.append(el('p', { class: 'empty' }, 'Nada por aquí.')); queueThumbs(grid); };
+  const mk = (id, label) => { const b = el('button', { class: 'chip' + (cat === id ? ' on' : ''), type: 'button' }, label); b.addEventListener('click', () => { cat = id; chips.querySelectorAll('.chip').forEach(x => x.classList.remove('on')); b.classList.add('on'); draw(); }); return b; };
+  chips.append(mk('', 'Todos')); CATEGORIES.filter(c => !c.hidden).forEach(c => chips.append(mk(c.id, c.icon + ' ' + c.name)));
+  q.addEventListener('input', draw); v.append(el('div', { class: 'search', style: 'text-align:center' }, q), chips, grid); draw();
+}
+function openFav() {
+  crumbs([{ label: 'Inicio', href: '#inicio' }, { label: 'Favoritos' }]); const f = favs(); const v = page('Favoritos', 'Los modelos que marcas con el corazón se guardan en este navegador.');
+  const grid = el('section', { class: 'grid models' }); [...f].filter(id => MODELS[id]).forEach(id => grid.append(modelCard(MODELS[id])));
+  if (!f.size) grid.append(el('p', { class: 'empty' }, 'Aún no tienes favoritos. Pulsa ♡ en cualquier modelo.')); v.append(grid); queueThumbs(grid);
+}
+function openTools() {
+  crumbs([{ label: 'Inicio', href: '#inicio' }, { label: 'Herramientas' }]); const v = page('Herramientas', 'Utilidades para impresión 3D y diseño.');
+  const g = el('section', { class: 'grid tools' }); const t = (href, ic, name, desc) => el('a', { class: 'card tool', href }, el('div', { class: 'ic' }, ic), el('div', {}, el('b', {}, name), el('p', {}, desc)));
+  g.append(t('#svg', '🖼️', 'Conversor a SVG', 'Convierte imágenes PNG, JPEG o WebP en un SVG vectorial para usar en modelos 3D, corte o Cricut.'), t('#generador-qr', '🔳', 'Generador de QR', 'Crea códigos QR desde cualquier enlace o texto y descárgalos en PNG o SVG.'), t('#pruebas', '📏', 'Archivos de prueba', 'Calibración, tolerancias, puentes y roscas para ajustar tu impresora.'));
+  v.append(g);
+}
+function numField(label, val, min, max, step, unit = '') { const r = el('input', { type: 'range', min, max, step, value: val }); const n = el('input', { type: 'number', min, max, step, value: val }); r.addEventListener('input', () => { n.value = r.value; n.dispatchEvent(new Event('sync')); }); n.addEventListener('change', () => { r.value = n.value; n.dispatchEvent(new Event('sync')); }); const box = el('div', { class: 'f' }, el('label', {}, label, el('em', {}, unit)), el('div', { class: 'row' }, r, n)); box.val = () => +n.value; box.on = fn => n.addEventListener('sync', fn); return box; }
+function openSvg() {
+  crumbs([{ label: 'Inicio', href: '#inicio' }, { label: 'Herramientas', href: '#herramientas' }, { label: 'Conversor a SVG' }]); const v = page('Conversor a SVG', 'Sube una imagen y conviértela en trazados vectoriales. Todo se hace en tu navegador.');
+  let img = demo('logo'); const inp = el('input', { type: 'file', accept: 'image/*' }); const thr = numField('Umbral', 55, 5, 95, 1, '%'), width = numField('Ancho del SVG', 100, 10, 400, 1, 'mm'), smooth = numField('Simplificar', 0.15, 0.02, 1, 0.01, 'mm'), clean = numField('Limpiar manchas', 0.4, 0, 3, 0.1, 'mm');
+  const modeS = el('select', {}); for (const [k, l] of [['auto', 'Automático'], ['dark', 'Zonas oscuras'], ['light', 'Zonas claras'], ['alpha', 'Transparencia (PNG)']]) modeS.append(el('option', { value: k }, l));
+  const prev = el('div', { class: 'toolprev' }); const info = el('p', { class: 'muted small' }); let svgText = '';
+  const run = () => { try { const W = width.val(); const H = W * img.height / img.width; const F = K.frame(W, H, { margin: 2, maxPx: 1000 }); let m = F.image(img, 0, 0, W, H, { thr: thr.val(), mode: modeS.value }); if (clean.val() > 0) m = K.open(F, m, clean.val() / 2);
+      const loops = K.traceLoops(F, m, smooth.val()); const d = loops.map(l => 'M' + l.map(([x, y]) => (x + W / 2).toFixed(2) + ' ' + (H / 2 - y).toFixed(2)).join('L') + 'Z').join('');
+      svgText = `<svg xmlns="http://www.w3.org/2000/svg" width="${W.toFixed(1)}mm" height="${H.toFixed(1)}mm" viewBox="0 0 ${W.toFixed(2)} ${H.toFixed(2)}"><path fill="#000" fill-rule="evenodd" d="${d}"/></svg>`;
+      prev.innerHTML = svgText; info.textContent = `${loops.length} trazados · ${W.toFixed(0)} × ${H.toFixed(0)} mm`; } catch (e) { info.textContent = 'No se ha podido convertir: ' + e.message; } };
+  inp.addEventListener('change', () => { const f = inp.files[0]; if (!f) return; const im = new Image(); im.onload = () => { img = im; run(); }; im.src = URL.createObjectURL(f); });
+  [thr, width, smooth, clean].forEach(x => x.on(run)); modeS.addEventListener('change', run);
+  const dl = el('button', { class: 'primary', type: 'button' }, 'Descargar SVG'); const msg = el('p', { class: 'muted small' }); dl.addEventListener('click', async () => { msg.textContent = await saveFile('imagen.svg', new Blob([svgText], { type: 'image/svg+xml' })); });
+  v.append(el('div', { class: 'toolbox' }, el('aside', { class: 'panel' }, el('div', { class: 'f' }, el('label', {}, 'Imagen'), el('div', { class: 'img' }, el('label', { class: 'btn' }, 'Subir imagen', inp))), el('div', { class: 'f' }, el('label', {}, 'Qué convertir'), modeS), thr, width, smooth, clean, info, dl, msg), prev)); run();
+}
+function openQrTool() {
+  crumbs([{ label: 'Inicio', href: '#inicio' }, { label: 'Herramientas', href: '#herramientas' }, { label: 'Generador de QR' }]); const v = page('Generador de QR', 'Código QR desde cualquier enlace o texto, en PNG o SVG.');
+  const txt = el('textarea', {}); txt.value = 'https://'; const size = numField('Tamaño (PNG)', 800, 200, 2000, 50, 'px'), margin = numField('Margen', 2, 0, 8, 1, 'módulos');
+  const fg = el('input', { type: 'color', value: '#22223b' }), bg = el('input', { type: 'color', value: '#ffffff' }); const prev = el('div', { class: 'toolprev' }); const cv = el('canvas', {}); prev.append(cv); let svgText = '';
+  const run = () => { const q = K.makeQR(txt.value || ' '); const n = q.getModuleCount(), mg = margin.val(), tot = n + 2 * mg, px = size.val(); cv.width = cv.height = px; const x = cv.getContext('2d'); x.fillStyle = bg.value; x.fillRect(0, 0, px, px); x.fillStyle = fg.value; const c = px / tot;
+    let rects = ''; for (let r = 0; r < n; r++) for (let k = 0; k < n; k++) if (q.isDark(r, k)) { x.fillRect(Math.floor((k + mg) * c), Math.floor((r + mg) * c), Math.ceil(c), Math.ceil(c)); rects += `M${k + mg} ${r + mg}h1v1h-1z`; }
+    svgText = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${tot} ${tot}" shape-rendering="crispEdges"><rect width="100%" height="100%" fill="${bg.value}"/><path fill="${fg.value}" d="${rects}"/></svg>`; };
+  [size, margin].forEach(f => f.on(run)); [txt, fg, bg].forEach(e => e.addEventListener('input', run));
+  const msg = el('p', { class: 'muted small' }); const bP = el('button', { class: 'primary', type: 'button' }, 'Descargar PNG'), bS = el('button', { class: 'primary', type: 'button' }, 'Descargar SVG');
+  bP.addEventListener('click', () => cv.toBlob(async b => { msg.textContent = await saveFile('codigo-qr.png', b); }, 'image/png')); bS.addEventListener('click', async () => { msg.textContent = await saveFile('codigo-qr.svg', new Blob([svgText], { type: 'image/svg+xml' })); });
+  v.append(el('div', { class: 'toolbox' }, el('aside', { class: 'panel' }, el('div', { class: 'f' }, el('label', {}, 'Enlace o texto'), txt), size, margin, el('div', { class: 'f' }, el('label', {}, 'Colores'), el('div', { class: 'row' }, fg, el('span', { class: 'small muted' }, 'código'), bg, el('span', { class: 'small muted' }, 'fondo'))), el('div', { class: 'btnrow' }, bP, bS), msg), prev)); run();
+}
 function crumbs(parts) { const c = $('#crumbs'); c.innerHTML = ''; parts.forEach((p, i) => { if (i) c.append(' / '); c.append(p.href ? el('a', { href: p.href }, p.label) : el('span', {}, p.label)); }); }
 function openHome() { show('view-home'); crumbs([]); stopViewer(); }
 function openCat(c) {
-  state.cat = c; show('view-cat'); crumbs([{ label: 'Inicio', href: '#inicio' }, { label: c.name }]); stopViewer();
+  state.cat = c; show('view-cat'); crumbs(c.hidden ? [{ label: 'Inicio', href: '#inicio' }, { label: 'Herramientas', href: '#herramientas' }, { label: c.name }] : [{ label: 'Inicio', href: '#inicio' }, { label: c.name }]); stopViewer();
   $('#cat-title').textContent = c.name; $('#cat-desc').textContent = c.desc; $('#cat-count').textContent = c.models.length + ' modelos';
   const g = $('#cat-models'); g.innerHTML = ''; c.models.forEach(id => g.append(modelCard(MODELS[id])));
   queueThumbs(g);
@@ -32,13 +87,14 @@ function openCat(c) {
 function modelCard(m) {
   if (m.soon) return el('div', { class: 'card soon' }, el('div', { class: 'thumb' }, '⏳'), el('div', { class: 't' }, el('b', {}, m.name), el('span', {}, 'Necesita geometría esculpida; no incluido aún.')));
   const th = el('div', { class: 'thumb', 'data-model': m.id }, '…');
-  return el('a', { class: 'card', href: '#m-' + m.id }, th, el('div', { class: 't' }, el('b', {}, m.name), el('span', {}, m.desc)));
+  const fv = el('button', { class: 'fav', type: 'button', title: 'Favorito' }, favs().has(m.id) ? '♥' : '♡'); fv.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); fv.textContent = toggleFav(m.id) ? '♥' : '♡'; });
+  return el('a', { class: 'card', href: '#m-' + m.id }, fv, th, el('div', { class: 't' }, el('b', {}, m.name), el('span', {}, m.desc)));
 }
 function renderCats() {
-  const g = $('#cats'); CATEGORIES.forEach(c => g.append(el('a', { class: 'card cat', href: '#' + c.id }, el('div', { class: 'thumb' }, c.icon), el('div', { class: 't' }, el('b', {}, c.name), el('span', {}, c.desc), el('small', {}, c.models.filter(id => !MODELS[id].soon).length + ' modelos')))));
+  const g = $('#cats'); CATEGORIES.filter(c => !c.hidden).forEach(c => g.append(el('a', { class: 'card cat', href: '#' + c.id }, el('div', { class: 'thumb' }, c.icon), el('div', { class: 't' }, el('b', {}, c.name), el('span', {}, c.desc), el('small', {}, c.models.filter(id => !MODELS[id].soon).length + ' modelos')))));
   $('#q').addEventListener('input', e => { const q = e.target.value.trim().toLowerCase(); const r = $('#results'); r.innerHTML = '';
     if (!q) { r.classList.add('hidden'); $('#cats').classList.remove('hidden'); return; }
-    const found = Object.values(MODELS).filter(m => (m.name + ' ' + (m.desc || '')).toLowerCase().includes(q)); found.forEach(m => r.append(modelCard(m)));
+    const found = uniqueModels().map(x => x.m).filter(m => (m.name + ' ' + (m.desc || '')).toLowerCase().includes(q)); found.forEach(m => r.append(modelCard(m)));
     if (!found.length) r.append(el('p', { class: 'muted' }, 'Nada con ese nombre.'));
     r.classList.remove('hidden'); $('#cats').classList.add('hidden'); queueThumbs(r); });
 }

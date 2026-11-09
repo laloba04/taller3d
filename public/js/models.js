@@ -131,7 +131,17 @@ function gChapa(p, o = {}) {
   const h = holeTab(F, S, o.iman ? 'no' : p.agujero, p.dAg); const base = h.base;
   const fondo = o.iman ? sub(base, F.disk(0, cy, D / 2 - 3)) : base;
   const f0 = 1.2, hc = p.hChapa;
-  return { F, layers: [L('Fondo', fondo, 0, f0, C.azul), L('Pared', sub(base, pocket), f0, f0 + hc, C.azul), L('Pestaña de sujeción', sub(base, lipIn), f0 + hc, f0 + hc + 0.8, C.azul)] };
+  const ztop = f0 + hc + 0.8; const layers = [L('Fondo', fondo, 0, f0, C.azul), L('Pared', sub(base, pocket), f0, f0 + hc, C.azul), L('Pestaña de sujeción', sub(base, lipIn), f0 + hc, ztop, C.azul)];
+  if (p.adorno && p.adorno !== 'no') { const bb = bbox(F, S); let ad;
+    if (p.adorno === 'lazo') ad = F.shape('lazo', 0, bb.y0 + Wo * 0.06, Wo * 0.55, Wo * 0.36);
+    else if (p.adorno === 'acebo') ad = F.draw(c => { const x = bb.x0 + Wo * 0.2, y = bb.y0 + Wo * 0.2, r = Wo * 0.13; for (const a of [-0.5, 0.9]) { c.save(); c.translate(x, y); c.rotate(a); c.beginPath(); c.ellipse(r * 0.9, 0, r, r * 0.42, 0, 0, Math.PI * 2); c.fill(); c.restore(); } });
+    else ad = F.blank();
+    const berries = p.adorno === 'acebo' ? F.draw(c => { const x = bb.x0 + Wo * 0.2, y = bb.y0 + Wo * 0.2, r = Wo * 0.05; for (const [dx, dy] of [[0, 0], [r * 1.6, r * 0.6], [r * 0.4, r * 1.7]]) { c.beginPath(); c.arc(x + dx, y + dy, r, 0, Math.PI * 2); c.fill(); } }) : F.blank();
+    const keep = dilate(F, pocket, 0.4); ad = sub(ad, keep); const be = sub(berries, keep);
+    if (h.clear) { ad = sub(ad, h.clear); }
+    for (const Lr of layers) Lr.mask = sub(Lr.mask, ad, be);
+    layers.push(L(p.adorno === 'lazo' ? 'Lazo' : 'Hojas de acebo', ad, 0, ztop + 0.6, p.adorno === 'lazo' ? C.rojo : C.verde)); if (K.count(be)) layers.push(L('Bayas', be, 0, ztop + 1, C.rojo)); }
+  return { F, layers };
 }
 /* llavero espejo con texto en arco */
 function gEspejo(p) {
@@ -185,6 +195,7 @@ function gTopper(p) {
   const y0 = -(Ht + Lp) / 2 + p.contorno; let T = F.blank();
   if (num) T = or(T, F.text([num], f, sN, 0, y0 + hN / 2));
   T = or(T, F.text(tn, f, dn.s, 0, y0 + Ht - dn.h / 2));
+  if (p.icono) { const ic = [p.icono]; const fe = font('emoji'); const sz = dn.h * 1.1; const xi = num ? -p.ancho * 0.32 : 0; T = or(T, F.text(ic, fe, sz, xi, y0 + (num ? hN * 0.4 : -sz * 0.2))); }
   let base = close(F, dilate(F, T, p.contorno), 3);
   const xs = p.palitos == 2 ? [-p.ancho * 0.22, p.ancho * 0.22] : [0];
   for (const x of xs) { const e = extreme(F, base, 'bottom', x - 1, x + 1); const yb = e[1] - 4; const yE = yb + Lp; base = or(base, F.draw(c => { c.beginPath(); c.moveTo(x - 2.6, yb); c.lineTo(x + 2.6, yb); c.lineTo(x + 2.6, yE - 6); c.lineTo(x, yE); c.lineTo(x - 2.6, yE - 6); c.closePath(); c.fill(); })); }
@@ -232,11 +243,15 @@ function gMarco(p, o = {}) {
 }
 /* soporte de tarta (torno, 2 piezas) */
 function gTarta(p) {
-  const Rp = p.diametro / 2, Rf = p.dPie / 2, rc = p.dColumna / 2, H = p.alto;
-  const m1 = K.newMesh(), m2 = K.newMesh();
-  K.lathe([[6.4, 0], [Rp, 0], [Rp, 4], [0, 4], [0, 3], [6.4, 3]], -Rp - 4, 0, 128, m1);
-  K.lathe([[0, 0], [Rf, 0], [Rf, 3], [rc, 3 + (Rf - rc)], [rc, H], [6, H], [6, H + 2.8], [0, H + 2.8]], Rf + 4, 0, 128, m2);
-  return { layers: [LM('Plato', m1, C.rosa), LM('Pie', m2, C.rosa)] };
+  const Rp = p.diametro / 2, Rf = p.dPie / 2, rc = p.dColumna / 2, H = p.alto; const layers = [];
+  const F = frame(2 * Rp + 4, 2 * Rp + 4, { margin: 3, maxPx: 1100, res: 4 }); const plate = p.borde === 'ondulado' ? F.shape('ondulado', 0, 0, 2 * Rp, 2 * Rp) : F.disk(0, 0, Rp);
+  const xp = -Rp - 4; layers.push(LM('Plato', mm(F, sub(plate, F.disk(0, 0, 6.4)), 0, 3, xp), C.blanco), LM('Plato (cara superior)', mm(F, plate, 3, 4.5, xp), C.blanco));
+  if (p.borde === 'ondulado') layers.push(LM('Ribete', mm(F, ring(F, plate, 2), 4.5, 5.5, xp), C.rosa));
+  const xf = Rf + 4 + p.estria; const m2 = K.newMesh();
+  if (p.estrias > 0) { const prof = z => rc + (Rf - rc) * Math.pow(Math.max(0, 1 - z / (H * 0.9)), 1.6); K.tube((a, z) => prof(z) + p.estria * Math.max(0, 1 - z / H) * (0.5 + 0.5 * Math.cos(p.estrias * a)), null, 0, H, p.estrias * 8, Math.round(H / 0.8), xf, 0, m2); K.lathe([[0, H - 0.5], [6, H - 0.5], [6, H + 2.8], [0, H + 2.8]], xf, 0, 64, m2); }
+  else K.lathe([[0, 0], [Rf, 0], [Rf, 3], [rc, 3 + (Rf - rc)], [rc, H], [6, H], [6, H + 2.8], [0, H + 2.8]], xf, 0, 128, m2);
+  layers.push(LM('Pie', m2, C.rosa));
+  return { layers, note: 'El plato se imprime con la cara de arriba hacia arriba; el pie encaja en el hueco central de debajo.' };
 }
 /* letrero multicapa a partir de imagen */
 function gMulticapa(p) {
@@ -286,7 +301,15 @@ function gTubo(p, o = {}) {
   if (p.rosca) {
     const d = 0.9, P = p.paso || 2.5; const Ln = Math.min(o.bote ? 8 : 9, p.alto * 0.4); const Rn = Ri + Math.max(1.2, p.pared * 0.8); const Rci = Rn + tol; const R = Rci + d + Math.max(1.4, p.pared);
     const Hb = p.alto - Ln; const xb = -R - 4, xc = R + 4;
-    const b = K.newMesh(); K.lathe([[0, 0], [R, 0], [R, Hb], [Ri, Hb], [Ri, f], [0, f]], xb, 0, 128, b);
+    const b = K.newMesh();
+    if ((p.textura && p.textura !== 'no') || p.nombreCuerpo) {
+      const C0 = 2 * Math.PI * R, Hc = Hb - f; const G = frame(C0, Hc, { margin: 1, maxPx: 700, res: 3 }); let D = G.blank();
+      if (p.textura && p.textura !== 'no') D = G.pattern(p.textura, p.sep || 4, 0.9, 3);
+      if (p.nombreCuerpo) { const fn = font(p.fuenteCuerpo || p.fuente); const t = [p.nombreCuerpo]; const sz = fitSize(t, fn, Hc * 0.8, C0 * 0.3); const T = G.text(t, fn, sz, 0, 0, { rot: -Math.PI / 2, mirror: false }); D = or(sub(D, dilate(G, T, 1.2)), T); }
+      D = and(D, G.rect(-C0, -Hc / 2 + 1.5, C0, Hc / 2 - 1.5)); const smp = sampler(G, D);
+      K.lathe([[0, 0], [R, 0], [R, f], [0, f]], xb, 0, 128, b);
+      K.tube((a, z) => R - 0.6 * smp(a / (2 * Math.PI) * C0 - C0 / 2, -(z - f - Hc / 2)), () => Ri, f, Hb, Math.min(700, Math.round(C0 * 3)), Math.round(Hc * 3), xb, 0, b);
+    } else K.lathe([[0, 0], [R, 0], [R, Hb], [Ri, Hb], [Ri, f], [0, f]], xb, 0, 128, b);
     const fade = (z, z0, z1) => Math.max(0, Math.min(1, (z - z0) / 1.2, (z1 - z) / 1.2));
     K.tube((a, z) => Rn + d * K.threadProfile(a, z, P, d) * fade(z, Hb, p.alto), () => Ri, Hb, p.alto, 128, Math.ceil(Ln / 0.12), xb, 0, b);
     layers.push(LM(o.bote ? 'Bote' : 'Cuerpo', b, C.oro));
@@ -308,13 +331,13 @@ function gTubo(p, o = {}) {
 }
 function gFamilia(p) {
   const f = font(p.fuente); const names = lines(p.nombres, 'Familia'); const H = p.alto, gap = 7;
-  const ws = names.map(n => tdim([n], f, 1)); const s = Math.min(...ws.map(d => 1 / d.h)) * H * 0.55;
+  const ws = names.map(n => tdim([n], f, 1)); const s = Math.min(...ws.map(d => 1 / d.h)) * H * 0.55; const Hk = p.forma && p.forma !== 'capsula' ? 1.6 : 1;
   const widths = names.map(n => Math.min(p.anchoMax, measure([n], f).w * s + H * 0.9));
-  const tot = names.length * H + (names.length - 1) * gap; const F = frame(Math.max(...widths) + 8, tot + 14);
+  const tot = names.length * H * Hk + (names.length - 1) * gap; const F = frame(Math.max(...widths) * 1.1 + 8, tot + 14);
   let plates = F.blank(), T = F.blank();
-  names.forEach((n, i) => { const cy = -tot / 2 + i * (H + gap) + H / 2; let pl = F.shape('capsula', 0, cy, widths[i], H);
-    const holes = []; if (i === 0) { pl = or(pl, F.disk(0, cy - H / 2, 4.5)); holes.push(F.disk(0, cy - H / 2 - 1, 2)); } else holes.push(F.disk(0, cy - H / 2 + 3.2, 1.6)); if (i < names.length - 1) holes.push(F.disk(0, cy + H / 2 - 3.2, 1.6));
-    pl = sub(pl, ...holes); plates = or(plates, pl); T = or(T, and(F.text([n], f, Math.min(s, (widths[i] - H * 0.9) / measure([n], f).w), 0, cy), sub(erode(F, pl, 1.2), ...holes.map(hh => dilate(F, hh, 2))))); });
+  names.forEach((n, i) => { const cy = -tot / 2 + i * (H * Hk + gap) + H * Hk / 2; const fm = p.forma === 'mixto' ? (i === names.length - 1 ? 'huella' : 'corazon') : (p.forma || 'capsula'); let pl = fm === 'capsula' ? F.shape('capsula', 0, cy, widths[i], H) : F.shape(fm, 0, cy, fm === 'huella' ? H * 1.5 : Math.min(widths[i] * 0.95, H * 2.4), fm === 'huella' ? H * 1.5 : H * 1.6);
+    const holes = []; const yt = extreme(F, pl, 'top', -2, 2)[1], yb2 = extreme(F, pl, 'bottom', -2, 2)[1]; if (i === 0) { pl = or(pl, F.disk(0, yt, 4.5)); holes.push(F.disk(0, yt - 1, 2)); } else { pl = or(pl, F.disk(0, yt + 3, 3.4)); holes.push(F.disk(0, yt + 3.2, 1.6)); } if (i < names.length - 1) { pl = or(pl, F.disk(0, yb2 - 3, 3.4)); holes.push(F.disk(0, yb2 - 3.2, 1.6)); }
+    pl = sub(pl, ...holes); plates = or(plates, pl); const sz = fm === 'capsula' ? Math.min(s, (widths[i] - H * 0.9) / measure([n], f).w) : fitSize([n], f, (fm === 'huella' ? H * 1.5 : widths[i] * 0.95) * 0.6, H * Hk * (fm === 'huella' ? 0.25 : 0.38)); const ty = fm === 'corazon' ? cy - H * Hk * 0.08 : fm === 'huella' ? cy + H * Hk * 0.22 : cy; T = or(T, and(F.text([n], f, sz, 0, ty), sub(erode(F, pl, 1.2), ...holes.map(hh => dilate(F, hh, 2))))); });
   return { F, layers: [L('Placas', plates, 0, 3, C.marron), L('Nombres', T, 3, 4, C.blanco)] };
 }
 function gLitofania(p) {
@@ -439,7 +462,11 @@ function gCortador(p) {
   if (p.modo === 'texto') { const t = lines(p.texto, 'Ana'); const s = fitSize(t, f, S0, S0); T = F.text(t, f, s, cx, 0); O = fillHoles(F, close(F, dilate(F, T, 2), 3)); }
   else if (p.modo === 'imagen') { const s = imgFit(p.img, S0, S0); const I = F.image(p.img, cx, 0, s.w, s.h, { thr: p.umbral }); O = fillHoles(F, close(F, dilate(F, I, 0.3), 1.5)); det = and(I, erode(F, O, 2)); }
   else { O = F.shape(p.forma, cx, 0, S0, S0); if (p.texto) { const t = lines(p.texto, ''); const fit = FIT[p.forma] || [.6, .5]; const s = fitSize(t, f, S0 * fit[0], S0 * fit[1]); T = and(F.text(t, f, s, cx + S0 * (fit[2] || 0), S0 * (fit[3] || 0)), erode(F, O, 3)); } }
-  const blade = outline(F, O, p.pared), lip = outline(F, O, p.pared + p.pestana);
+  let blade = outline(F, O, p.pared), lip = outline(F, O, p.pared + p.pestana);
+  if (p.hueco && p.hueco !== 'no') { const bb = bbox(F, O); const hs = Math.min(bb.bw, bb.bh) * p.tamHueco / 100; const fit = FIT[p.forma] || [0, 0, 0, 0]; const hy = p.modo === 'forma' ? S0 * (fit[3] || 0) : 0;
+    const Hm = F.shape(p.hueco, cx, hy + p.posHueco, hs, hs); const ib = outline(F, Hm, p.pared); blade = or(blade, ib);
+    const ribs = and(F.draw(c => { c.lineWidth = 3; c.beginPath(); c.moveTo(cx - S0, hy + p.posHueco); c.lineTo(cx + S0, hy + p.posHueco); c.stroke(); }), sub(dilate(F, O, p.pared + 0.5), Hm));
+    lip = or(lip, ribs, outline(F, Hm, p.pared + 1.5)); }
   const layers = [L('Pestaña', lip, 0, 2, C.rosa), L('Cuchilla', blade, 2, p.alto, C.rosa)];
   if (det && p.marcas) layers.push(L('Marcas interiores', or(dilate(F, det, 0.3), F.blank()), 2, p.alto * 0.55, C.rosa));
   if (p.sello) { const plate = mirrorTo(F, erode(F, O, 0.8), cx, sx); const rel = det || T || F.blank(); layers.push(L('Sello: base', plate, 0, 3, C.lila), L('Sello: relieve', and(mirrorTo(F, rel, cx, sx), erode(F, plate, 1)), 3, 3 + p.relieve, C.lila)); }
@@ -593,7 +620,9 @@ function gTarjeta(p) {
   if (p.cargo) T = or(T, F.text([p.cargo], f2, Math.min(4, fitSize([p.cargo], f2, tw, 4.5)), xl, -H / 2 + 21, { align: 'left' }));
   const info = lines(p.datos, ''); if (p.datos) T = or(T, F.text(info, f2, Math.min(3.4, fitSize(info, f2, tw, 20, 1.5)), xl, H / 2 - 13, { align: 'left', lh: 1.5 }));
   if (q) T = or(T, F.qr(p.url || 'https://', W / 2 - 5 - q / 2, 0, q));
-  return { F, layers: [L('Tarjeta', S, 0, 1.2, C.lila), L('Texto', and(T, erode(F, S, 1)), 1.2, 1.8, C.blanco)] };
+  const layers = [L('Tarjeta', S, 0, 1.2, C.lila), L('Texto', and(T, erode(F, S, 1)), 1.2, 1.8, C.blanco)];
+  if (p.textura && p.textura !== 'no') layers.splice(1, 0, L('Textura', sub(and(F.pattern(p.textura, 1.6, 0.5, 2), erode(F, S, 1.4)), dilate(F, T, 1.2)), 1.2, 1.5, C.lila));
+  return { F, layers };
 }
 function gSoporteTarjetas(p) {
   const W = 95, D = 32; const F = frame(W + 6, D + 6); const B = F.rectC(0, 0, W, D, 3); const f = font(p.fuente);
@@ -824,6 +853,141 @@ function gCarrete(p) {
   return { F, layers, note: 'Pausa al empezar la capa "Brida (tapa)" para meter la etiqueta NFC.' };
 }
 
+
+/* ===================== ampliación: abrelatas, rattan, llavero de imagen, rosa con nombre… ===================== */
+/* cabeza decorativa reutilizable: devuelve { base, capas:[{name,mask,dz,color}] } centrada en (0,cy) */
+function cabeza(F, p, cy, size) {
+  const f = font(p.fuente); const capas = []; let sil;
+  switch (p.cabeza) {
+    case 'imagen': { const s = imgFit(p.img, size, size); const I = F.image(p.img, 0, cy, s.w, s.h, { thr: p.umbral }); sil = fillHoles(F, close(F, I, 1.5));
+      const Lu = F.lum(p.img, 0, cy, s.w, s.h); const dark = new Uint8Array(F.n); for (let i = 0; i < F.n; i++) if (sil[i] && Lu[i] >= 0 && Lu[i] < 0.35) dark[i] = 1;
+      capas.push({ name: 'Imagen', mask: sil, dz: 1, color: p.color2 || C.rosa }); if (K.count(and(dark, erode(F, sil, 0.6)))) capas.push({ name: 'Detalles', mask: and(dilate(F, dark, 0.2), erode(F, sil, 0.6)), dz: 1.6, color: C.negro }); break; }
+    case 'texto': { const t = lines(p.texto, '@tumarca'); const s = fitSize(t, f, size * 0.86, size * 0.42); const T = F.text(t, f, s, 0, cy); const bb = bbox(F, T);
+      sil = F.rectC(0, cy, (bb ? bb.bw : size) + 8, Math.max(size * 0.42, (bb ? bb.bh : 10) + 7), 4); capas.push({ name: 'Figura', mask: sil, dz: 0.6, color: p.color2 || C.blanco }, { name: 'Texto', mask: T, dz: 1.2, color: p.color3 || C.rosa }); break; }
+    case 'flor': { sil = F.shape('flor', 0, cy, size, size); capas.push({ name: 'Pétalos', mask: sub(sil, F.disk(0, cy, size * 0.2)), dz: 0.6, color: p.color2 || C.lila }, { name: 'Centro', mask: F.disk(0, cy, size * 0.18), dz: 1.2, color: C.oro });
+      const pet = F.draw(c => { c.lineWidth = 0.7; for (let k = 0; k < 8; k++) { const a = k * Math.PI / 4 + Math.PI / 8; c.beginPath(); c.moveTo(Math.cos(a) * size * 0.22, cy + Math.sin(a) * size * 0.22); c.lineTo(Math.cos(a) * size * 0.46, cy + Math.sin(a) * size * 0.46); c.stroke(); } });
+      capas[0].mask = sub(capas[0].mask, pet); break; }
+    case 'esmalte': { sil = F.shape('esmalte', 0, cy, size * 0.62, size); const ic = p.texto ? p.texto : '♥'; const s = fitSize([ic], f, size * 0.42, size * 0.32); capas.push({ name: 'Bote', mask: sub(sil, F.rect(-size, cy - size, size, cy - size * 0.08)), dz: 0.6, color: p.color2 || C.rosa }, { name: 'Tapón', mask: and(sil, F.rect(-size, cy - size, size, cy - size * 0.1)), dz: 0.6, color: C.negro }, { name: 'Icono', mask: and(F.text([ic], f, s, 0, cy + size * 0.2), erode(F, sil, 1.6)), dz: 1.2, color: C.blanco }); break; }
+    default: { sil = F.shape(p.cabeza, 0, cy, size, size); capas.push({ name: 'Figura', mask: sil, dz: 0.8, color: p.color2 || C.rosa }); if (p.texto) { const t = lines(p.texto, ''); const fit = FIT[p.cabeza] || [.6, .45]; const s = fitSize(t, f, size * fit[0], size * fit[1]); capas.push({ name: 'Texto', mask: and(F.text(t, f, s, 0, cy + size * (fit[3] || 0)), erode(F, sil, 1.2)), dz: 1.4, color: C.blanco }); } }
+  }
+  return { sil, capas };
+}
+function gAbrelatas2(p) {
+  const size = p.tam, stemL = 26, stemW = 13; const F = frame(size + 2 * p.borde + 16, size + stemL + 2 * p.borde + 20);
+  const cy = -stemL / 2 - 2; const hd = cabeza(F, p, cy, size); const outline = close(F, dilate(F, hd.sil, p.borde), 2);
+  const eb = extreme(F, outline, 'bottom', -2, 2); const yS0 = eb[1] - 6, yS1 = yS0 + stemL + 6;
+  const stem = F.draw(c => { c.beginPath(); K.roundRect(c, -stemW / 2, yS0, stemW, yS1 - yS0, stemW * 0.35); c.fill(); });
+  const slot = F.rect(-stemW * 0.3, yS1 - 13, stemW * 0.3, yS1 - 4.5, 1.2); let base = sub(or(outline, stem), slot);
+  const h = holeTab(F, base, 'arriba', 4); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
+  const thin = F.rect(-stemW, yS1 - 9, stemW, yS1 + 2); const g = 3; const layers = [];
+  if (p.nfc) { const pocket = F.disk(0, cy, p.dNfc / 2 + 0.3); layers.push(L('Base', base, 0, 0.8, p.color1 || C.blanco), L('Base (hueco NFC: pausa)', sub(base, pocket, thin), 0.8, 0.8 + p.eNfc, p.color1 || C.blanco), L('Base (cierre)', sub(base, thin), 0.8 + p.eNfc, g, p.color1 || C.blanco), L('Punta fina', and(base, thin), 0.8, 1.6, p.color1 || C.blanco)); }
+  else layers.push(L('Base: punta', base, 0, 1.6, p.color1 || C.blanco), L('Base', sub(base, thin), 1.6, g, p.color1 || C.blanco));
+  const first = new Set(['Imagen', 'Pétalos', 'Bote', 'Figura', 'Tapón']); let zb = g; const top = Math.max(...hd.capas.filter(cp => first.has(cp.name)).map(cp => cp.dz), 0);
+  for (const cp of hd.capas) { const m = cl(and(cp.mask, erode(F, outline, 0.4))); if (!K.count(m)) continue; if (first.has(cp.name)) layers.push(L(cp.name, m, g, g + cp.dz, cp.color)); else layers.push(L(cp.name, m, g + top, g + top + cp.dz * 0.6, cp.color)); }
+  return { F, layers, note: 'Mete la punta fina bajo la anilla de la lata y haz palanca; la ranura engancha la anilla.' + (p.nfc ? ' Pausa al empezar "Base (cierre)" para meter la etiqueta NFC.' : '') };
+}
+/* rattan */
+function rattanPiece(F, M, p) { const fr = ring(F, M, p.marco); const inner = erode(F, M, p.marco - 0.6); const rt = and(F.pattern('rattan', p.paso, 1, 1), inner); return { fr, rt }; }
+function gRattan(p, o = {}) {
+  const fl = font(p.fuente); const layers = [];
+  if (o.v === 'panel') { const F = frame(p.ancho + 4, p.alto + 4); const M = F.rectC(0, 0, p.ancho, p.alto, 3); const r = rattanPiece(F, M, p); return { F, layers: [L('Marco', r.fr, 0, p.grosor, C.blanco), L('Rattan', r.rt, 0, p.grosorRattan, C.crema)] }; }
+  if (o.v === 'letras') {
+    const chars = [...String(p.texto || 'ELISA').replace(/\s/g, '')].slice(0, 12); const s = p.altura / measure(['M'], fl).h; const ws = chars.map(ch => measure([ch], fl).w * s + 4); const gap = 6; const W = ws.reduce((a, b) => a + b, 0) + gap * (chars.length - 1);
+    const F = frame(W, p.altura + 6); let x = -W / 2, fr = F.blank(), rt = F.blank(), holes = F.blank();
+    chars.forEach((ch, i) => { const M = F.text([ch], fl, s, x + ws[i] / 2, 0); const r = rattanPiece(F, M, p); fr = or(fr, r.fr); rt = or(rt, r.rt); x += ws[i] + gap; });
+    return { F, layers: [L('Marcos', fr, 0, p.grosor, C.rosa), L('Rattan', rt, 0, p.grosorRattan, C.crema)], note: 'Cada letra es una pieza. Para colgarlas usa cinta adhesiva de doble cara o masilla.' };
+  }
+  const ch = String(p.letra || 'E').trim().slice(0, 1) || 'E'; const s = p.altura / measure([ch], fl).h; const Wl = measure([ch], fl).w * s;
+  const fn = font(p.fuenteNombre); const tn = lines(p.nombre, ''); const dn = p.nombre ? tdim(tn, fn, Wl * 1.3) : null;
+  const F = frame(Math.max(Wl, dn ? dn.w : 0) + 14, p.altura + (o.v === 'base' ? 40 : 14)); const cy = o.v === 'base' ? -14 : 0;
+  const M = F.text([ch], fl, s, 0, cy); const r = rattanPiece(F, M, p); let fr = r.fr;
+  if (dn) { const Tn = F.text(tn, fn, dn.s, 0, cy + p.altura * 0.18, { bold: 0.4 }); const outl = close(F, dilate(F, Tn, 1.3), 1); layers.push(L('Nombre: contorno', outl, 0, p.grosor + 1, C.blanco), L('Nombre', Tn, p.grosor + 1, p.grosor + 2.2, C.rosa)); }
+  if (o.v === 'pared') { for (const sx of [-1, 1]) { const e = extreme(F, M, 'top', sx * Wl * 0.3 - 3, sx * Wl * 0.3 + 3); const tab = sub(F.disk(e[0], e[1] + p.marco / 2, 3.2), F.disk(e[0], e[1] + p.marco / 2, 1.3)); fr = or(fr, tab); } }
+  layers.unshift(L('Marco', fr, 0, p.grosor, C.verde), L('Rattan', r.rt, 0, p.grosorRattan, C.crema));
+  if (o.v === 'base') { const yb = extreme(F, M, 'bottom')[1]; const tabW = Math.min(Wl * 0.6, 50); layers[0].mask = or(layers[0].mask, and(tabMask(F, 0, yb - 0.5, tabW), sub(F.rect(-Wl, yb - 1, Wl, yb + 7), F.blank()))); layers.push(...standParts(F, tabW, p.grosor, 0, yb + 9)); }
+  return { F, layers, note: o.v === 'pared' ? 'Pasa un cordón por las dos anillas de arriba para colgarla.' : '' };
+}
+/* llavero a partir de una imagen */
+function gLlaveroImagen(p) {
+  const s = imgFit(p.img, p.tam, p.tam); const tH = p.texto ? p.tam * 0.28 : 0; const F = frame(p.tam + 2 * p.borde + 14, p.tam + tH + 2 * p.borde + 18);
+  const cy = -tH / 2; const Lu = F.lum(p.img, 0, cy, s.w, s.h); const n = F.n; const sil = new Uint8Array(n), mid = new Uint8Array(n), dark = new Uint8Array(n);
+  for (let i = 0; i < n; i++) { const v = Lu[i]; if (v < 0) continue; if (v < 0.94) sil[i] = 1; if (v < 0.62) mid[i] = 1; if (v < 0.3) dark[i] = 1; }
+  let S = fillHoles(F, close(F, sil, 1.2)); if (imgHasAlphaSafe(p.img)) S = fillHoles(F, close(F, F.image(p.img, 0, cy, s.w, s.h, { mode: 'alpha' }), 1.2));
+  let T = F.blank(); if (p.texto) { const f = font(p.fuente); const t = lines(p.texto, ''); const sz = fitSize(t, f, p.tam * 1.1, tH); T = F.text(t, f, sz, 0, cy + s.h / 2 + tH / 2 + 1); }
+  let base = close(F, dilate(F, or(S, T), p.borde), 2); const h = holeTab(F, base, p.agujero, p.dAg); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
+  const layers = [];
+  if (p.nfc) { const pocket = F.disk(0, cy, p.dNfc / 2 + 0.3); layers.push(L('Base', base, 0, 0.8, C.blanco), L('Base (hueco NFC: pausa)', sub(base, pocket), 0.8, 0.8 + p.eNfc, C.blanco), L('Base (cierre)', base, 0.8 + p.eNfc, 2.2 + p.eNfc, C.blanco)); }
+  else layers.push(L('Base', base, 0, 2.4, C.blanco));
+  const z = layers[layers.length - 1].z1;
+  layers.push(L('Color 1', cl(sub(S, mid)), z, z + 0.8, p.c1 || C.rosa), L('Color 2', cl(and(sub(mid, dark), S)), z, z + 1.2, p.c2 || C.rojo), L('Color 3 (oscuro)', cl(and(dark, S)), z, z + 1.6, C.negro));
+  if (p.texto) layers.push(L('Texto', cl(T), z, z + 1, C.negro));
+  return { F, layers: layers.filter(Lr => K.count(Lr.mask)), note: (p.nfc ? 'Pausa al empezar "Base (cierre)" para meter la etiqueta NFC. ' : '') + 'Los colores salen de los tonos de la imagen (claros, medios y oscuros).' };
+}
+function imgHasAlphaSafe(img) { try { const c = document.createElement('canvas'); c.width = c.height = 48; const x = c.getContext('2d'); x.drawImage(img, 0, 0, 48, 48); const d = x.getImageData(0, 0, 48, 48).data; let t = 0; for (let k = 3; k < d.length; k += 4) if (d[k] < 200) t++; return t > 48 * 48 * 0.02; } catch (e) { return false; } }
+/* rosa de línea con nombre */
+function rosaLinea(F, cx, cy, R, lw) {
+  return F.draw(c => { c.lineWidth = lw; c.beginPath(); for (let a = 0; a < 4.6 * Math.PI; a += 0.08) { const r = R * 0.05 * a; c.lineTo(cx + Math.cos(a) * r * 0.95, cy - R * 0.12 + Math.sin(a) * r * 0.75); } c.stroke();
+    c.beginPath(); c.arc(cx, cy - R * 0.05, R * 0.78, Math.PI * 0.15, Math.PI * 0.85); c.stroke(); c.beginPath(); c.arc(cx - R * 0.25, cy - R * 0.2, R * 0.6, Math.PI * 0.9, Math.PI * 1.6); c.stroke(); c.beginPath(); c.arc(cx + R * 0.25, cy - R * 0.2, R * 0.6, Math.PI * 1.4, Math.PI * 2.1); c.stroke();
+    c.beginPath(); c.arc(cx, cy, R, Math.PI * 0.05, Math.PI * 0.95); c.stroke(); c.beginPath(); c.arc(cx, cy - R * 0.15, R * 0.98, Math.PI * 1.08, Math.PI * 1.92); c.stroke();
+    c.beginPath(); c.moveTo(cx - R, cy - R * 0.1); c.quadraticCurveTo(cx - R * 1.05, cy + R * 0.6, cx - R * 0.4, cy + R * 0.85); c.stroke(); c.beginPath(); c.moveTo(cx + R, cy - R * 0.1); c.quadraticCurveTo(cx + R * 1.05, cy + R * 0.6, cx + R * 0.4, cy + R * 0.85); c.stroke(); });
+}
+function gRosaNombre(p) {
+  const f = font(p.fuente); const t = lines(p.texto, 'mamá'); const d = tdim(t, f, p.ancho); const R = Math.max(d.h * 0.85, 6); const F = frame(p.ancho + 2 * R + 30, Math.max(d.h, 2 * R) + 18);
+  const x0 = -(p.ancho + 2 * R + 4) / 2 + R; const rose = rosaLinea(F, x0, 0, R, Math.max(1, R * 0.12)); const T = F.text(t, f, d.s, x0 + R + 3 + p.ancho / 2, 0, { bold: 0.3 });
+  const tb = bbox(F, T); const tail = F.draw(c => { c.lineWidth = 1.3; c.beginPath(); c.moveTo(tb.x1 - 1.5, tb.y1 - d.h * 0.25); c.quadraticCurveTo(tb.x1 + 5, tb.y1 - d.h * 0.1, tb.x1 + 10, tb.y1 - d.h * 0.45); c.stroke(); });
+  const all = or(rose, T, tail); let base = close(F, dilate(F, all, p.borde), 1.5); const h = holeTab(F, base, p.agujero, p.dAg); base = h.base;
+  return { F, layers: [L('Base', base, 0, 2.4, C.blanco), L('Rosa y nombre', h.clear ? sub(all, h.clear) : all, 2.4, 3.4, C.rosa)] };
+}
+/* varios llaveros de una vez (uno por nombre) */
+function gVarios(p, genOne) {
+  const names = lines(p.nombres, 'Leo').slice(0, 9); const cols = Math.min(3, names.length); const layers = []; let gx = 0, gy = 0, rowH = 0, x = 0; const sp = 4; const pieces = [];
+  for (const nm of names) { const r = genOne({ ...p, texto: nm }); pieces.push(r); }
+  const W = pieces.map(r => r.F.W - 10); const H = pieces.map(r => r.F.H - 10); const colW = Math.max(...W) + sp, rowHh = Math.max(...H) + sp; const rows = Math.ceil(names.length / cols);
+  pieces.forEach((r, i) => { const cx = ((i % cols) - (cols - 1) / 2) * colW, cy = -(((i / cols) | 0) - (rows - 1) / 2) * rowHh;
+    for (const Lr of r.layers) { const m = K.maskToMesh(r.F, Lr.mask, Lr.z0, Lr.z1); K.fixOrientation(m); K.translateMesh(m, cx, cy); const ex = layers.find(q => q.name === Lr.name); if (ex) ex.mesh = K.mergeMeshes([ex.mesh, m]); else layers.push(LM(Lr.name, m, Lr.color)); } });
+  return { layers };
+}
+
+
+/* sellos de plastilina con su caja */
+function gSellosPlastilina(p) {
+  const icons = String(p.iconos || '⭐').split(/[,\s]+/).filter(Boolean).slice(0, 12); const D = p.diametro, n = icons.length, cols = Math.min(4, n), rows = Math.ceil(n / cols), sp = D + 4;
+  const showBox = p.caja; const boxW = cols * (D + 3) + 6, boxH = rows * (D + 3) + 6; const W = cols * sp + (showBox ? boxW + 10 : 0), H = Math.max(rows * sp, showBox ? boxH : 0);
+  const F = frame(W, H); const x0 = -W / 2; let base = F.blank(), rel = F.blank(), rim = F.blank(); const fe = font('emoji'), ft = font(p.fuente);
+  icons.forEach((ic, i) => { const x = x0 + (i % cols + 0.5) * sp, y = -rows * sp / 2 + ((i / cols | 0) + 0.5) * sp; const d = F.disk(x, y, D / 2); base = or(base, d); rim = or(rim, ring(F, d, 1.4));
+    const isEmoji = /\p{Extended_Pictographic}/u.test(ic); const f = isEmoji ? fe : ft; const s = fitSize([ic], f, D * 0.62, D * 0.62); rel = or(rel, and(F.text([ic], f, s, x, y, { mirror: true }), erode(F, d, 2.4))); });
+  const layers = [L('Sellos', base, 0, 3, C.blanco), L('Dibujo (espejo)', rel, 3, 3 + p.relieve, C.lila), L('Borde', rim, 3, 3 + p.relieve, C.lila)];
+  if (showBox) { const bx = x0 + cols * sp + 10 + boxW / 2; const box = F.rectC(bx, 0, boxW, boxH, 4); let wells = F.blank(); for (let i = 0; i < cols * rows; i++) wells = or(wells, F.disk(bx - boxW / 2 + 3 + (i % cols + 0.5) * (D + 3), -boxH / 2 + 3 + ((i / cols | 0) + 0.5) * (D + 3), D / 2 + 0.5));
+    layers.push(L('Caja: fondo', box, 0, 1.6, C.verde), L('Caja: huecos', sub(box, wells), 1.6, 1.6 + 3 + p.relieve + 1, C.verde)); }
+  return { F, layers, note: 'Presiona cada sello sobre la plastilina; los dibujos salen al derecho. La caja guarda los sellos con el dibujo hacia arriba.' };
+}
+/* archivos de prueba */
+function gTestTolerancia(p) {
+  const cs = [0.1, 0.2, 0.3, 0.4, 0.5]; const d = p.diametro, sp = d + 8; const F = frame(cs.length * sp + 8, 2 * sp + 22); const f = font('montserrat');
+  const plate = F.rectC(0, -sp / 2 - 4, cs.length * sp + 4, sp + 12, 3); let holes = F.blank(), labels = F.blank(), pins = F.blank();
+  cs.forEach((c, i) => { const x = (i - (cs.length - 1) / 2) * sp; holes = or(holes, F.disk(x, -sp / 2 - 6, (d + c) / 2)); labels = or(labels, F.text([c.toFixed(1)], f, 3.6, x, -sp / 2 + 5));
+    pins = or(pins, F.disk(x, sp / 2 + 4, d / 2)); });
+  return { F, layers: [L('Placa con agujeros', sub(plate, holes, labels), 0, 5, C.gris), L('Placa: números', labels, 0, 4.4, C.gris), L('Pivotes', pins, 0, 12, C.naranja)], note: 'Mete el pivote en cada agujero: el primero en el que entra sin forzar es la holgura que debes usar (0,1 a 0,5 mm).' };
+}
+function gTestCubo(p) {
+  const a = p.lado; const F = frame(a + 4, a + 4); const sq = F.rectC(0, 0, a, a, 0.4); const f = font('montserrat');
+  const T = or(F.text(['XY'], f, a * 0.28, 0, 0), F.draw(c => { c.lineWidth = 1; c.beginPath(); c.moveTo(-a * 0.35, a * 0.35); c.lineTo(a * 0.35, a * 0.35); c.lineTo(a * 0.27, a * 0.29); c.moveTo(a * 0.35, a * 0.35); c.lineTo(a * 0.27, a * 0.41); c.moveTo(-a * 0.35, a * 0.35); c.lineTo(-a * 0.35, -a * 0.35); c.lineTo(-a * 0.41, -a * 0.27); c.moveTo(-a * 0.35, -a * 0.35); c.lineTo(-a * 0.29, -a * 0.27); c.stroke(); }));
+  return { F, layers: [L('Cubo', sq, 0, a - 0.6, C.gris), L('Cara superior', sub(sq, T), a - 0.6, a, C.gris)], note: 'Mide el cubo con un calibre: debe dar ' + a + ' mm en X, Y y Z. Si no, ajusta los pasos (e-steps) o la escala.' };
+}
+function gTestPuentes(p) {
+  const spans = [10, 20, 30, 40, 50]; const F = frame(spans.reduce((s, x) => s + x + 8, 0) + 8, 20); let x = -(spans.reduce((s, v) => s + v + 8, 0)) / 2; let pil = F.blank(), br = F.blank();
+  for (const s of spans) { pil = or(pil, F.rectC(x + 3, 0, 6, 10), F.rectC(x + s + 5, 0, 6, 10)); br = or(br, F.rect(x, -5, x + s + 8, 5)); x += s + 8 + 4; }
+  return { F, layers: [L('Base', br, 0, 1, C.gris), L('Pilares', pil, 1, 10, C.gris), L('Puentes', br, 10, 11.4, C.naranja)], note: 'Prueba de puentes de 10 a 50 mm: mira a partir de qué largo cuelga el filamento.' };
+}
+function gTestRosca(p) {
+  const cs = [0.2, 0.3, 0.4]; const R = p.diametro / 2, d = 0.9, P = 2.5, L0 = 14, layers = []; const bolt = K.newMesh(), nut = K.newMesh(); const sp = 2 * R + 14;
+  cs.forEach((c, i) => { const x = (i - 1) * sp; const fade = z => Math.max(0, Math.min(1, z / 1.2, (L0 + 4 - z) / 1.2));
+    K.lathe([[0, 0], [R + 3, 0], [R + 3, 4], [0, 4]], x, -sp / 2, 64, bolt); K.tube((a, z) => R - d + d * K.threadProfile(a, z, P, d) * fade(z - 4), null, 4, 4 + L0, 96, Math.ceil(L0 / 0.12), x, -sp / 2, bolt);
+    const Rh = R + 5; K.tube(a => { const k = ((a % (Math.PI / 3)) + Math.PI / 3) % (Math.PI / 3) - Math.PI / 6; return Rh / Math.cos(k); }, (a, z) => R - d + c + d * K.threadProfile(a, z, P, d), 0, 8, 96, Math.ceil(8 / 0.12), x, sp / 2, nut); });
+  layers.push(LM('Tornillos', bolt, C.gris), LM('Tuercas (holgura 0,2 · 0,3 · 0,4)', nut, C.naranja));
+  return { layers, note: 'Tuercas de izquierda a derecha con holgura 0,2, 0,3 y 0,4 mm. Usa en botes y estuches la que enrosque suave.' };
+}
+
 /* ===================================================== CATÁLOGO ===================================================== */
 const MODELS = {};
 function M(id, name, desc, params, gen, extra = {}) { MODELS[id] = { id, name, desc, params, gen, ...extra }; }
@@ -836,7 +1000,7 @@ const PLACA = (o = {}) => [
   ...(o.icono ? [txt('icono', 'Icono (emoji)', o.icono)] : []), num('borde', 'Borde en relieve', o.borde ?? 1.6, 0, 4, 0.2), num('hBase', 'Grosor base', 2.6, 1.2, 6, 0.2), num('hRel', 'Relieve', 1, 0.4, 3, 0.2),
   ...HOLE(o.agujero || 'arriba'), ...(o.glaseado ? [chk('glaseado', 'Línea de glaseado', true)] : []),
 ];
-const CHAPA = (iman) => [shp('ondulado', ['circulo', 'ondulado', 'cuadrado', 'corazon', 'flor', 'hexagono', 'octogono', 'estrella', 'casa', 'arbol', 'bola', 'galleta']),
+const CHAPA = (iman, o = {}) => [shp(o.forma || 'ondulado', ['circulo', 'ondulado', 'cuadrado', 'corazon', 'flor', 'hexagono', 'octogono', 'estrella', 'casa', 'arbol', 'bola', 'galleta']), sel('adorno', 'Adorno', o.adorno || 'no', { no: 'Sin adorno', lazo: 'Lazo navideño', acebo: 'Acebo' }),
   sel('dChapa', 'Ø de la chapa', 58, { 25: '25 mm', 32: '32 mm', 38: '38 mm', 44: '44 mm', 56: '56 mm', 58: '58 mm' }), num('holgura', 'Holgura', 0.3, 0, 1, 0.1), num('hChapa', 'Grosor de la chapa', 4.5, 2, 9, 0.5), num('pared', 'Pared', 2.4, 1.2, 6, 0.2), num('labio', 'Pestaña que sujeta', 1, 0.4, 2, 0.1), ...(iman ? [] : HOLE())];
 
 // Llaveros
@@ -853,24 +1017,26 @@ M('ll-zanahoria', 'Llavero zanahoria con nombre', 'Zanahoria con el nombre en el
 M('ll-espejo', 'Llavero con espejo y texto', 'Aro para un espejito redondo con texto alrededor.', [num('dEspejo', 'Ø del espejo', 50, 25, 80), num('banda', 'Ancho del aro', 9, 6, 14), num('hEspejo', 'Profundidad', 2.4, 1, 5, 0.2), txt('texto', 'Texto superior', 'MAFALDA'), txt('texto2', 'Texto inferior', 'BEST MOM'), fnt('fuente', 'Fuente', 'montserrat'), ...HOLE('der')], p => gEspejo(p));
 M('ll-rosa', 'Llavero flor con texto', 'Medallón ondulado con flor y nombre en arco.', [num('diametro', 'Diámetro', 48, 30, 80), txt('texto', 'Texto', 'mejor mamá'), fnt('fuente', 'Fuente', 'fredoka'), ...HOLE()], p => gRosa(p));
 M('ll-resina', 'Imagen con bordes altos (resina)', 'Contorno y líneas de la imagen en relieve para rellenar con resina.', [img('img', 'Imagen (línea)', 'dibujo'), UMB, num('ancho', 'Tamaño', 50, 25, 120), num('pared', 'Grosor de pared', 1.4, 0.8, 3, 0.2), num('hPared', 'Altura de pared', 2, 1, 5, 0.2), ...HOLE()], p => gResina(p));
-M('ll-abrelatas', 'Llavero abrelatas', 'Palanca para abrir latas con nombre.', [txt('texto', 'Texto', 'Ana'), fnt('fuente', 'Fuente', 'luckiest'), num('largo', 'Largo', 70, 50, 100), num('anchoP', 'Ancho', 22, 16, 32)], p => gAbrelatas(p));
+M('ll-abrelatas', 'Abrelatas sencillo', 'Palanca con nombre, sin figura.', [txt('texto', 'Texto', 'Ana'), fnt('fuente', 'Fuente', 'luckiest'), num('largo', 'Largo', 70, 50, 100), num('anchoP', 'Ancho', 22, 16, 32)], p => gAbrelatas(p));
 M('chapa-llavero', 'Llavero para chapa', 'Marco a medida para una chapa (botón de alfiler).', CHAPA(false), p => gChapa(p));
 M('chapa-iman', 'Imán de nevera para chapa', 'Marco con el fondo abierto: lo sujeta el imán de la chapa.', CHAPA(true), p => gChapa(p, { iman: true }));
+M('chapa-nav-llavero', 'Llavero navideño para chapa', 'Marco con forma navideña y lazo o acebo.', CHAPA(false, { forma: 'bola', adorno: 'lazo' }), p => gChapa(p));
+M('chapa-nav-iman', 'Imán navideño para chapa', 'Imán de nevera con adorno de Navidad.', CHAPA(true, { forma: 'cuadrado', adorno: 'acebo' }), p => gChapa(p, { iman: true }));
 M('chapa-test', 'Test de tamaño de chapa', 'Aros de prueba para afinar la holgura.', [sel('dChapa', 'Ø de la chapa', 58, { 25: '25 mm', 32: '32 mm', 38: '38 mm', 44: '44 mm', 56: '56 mm', 58: '58 mm' }), num('hChapa', 'Altura', 3, 2, 8)], p => gChapa(p, { test: true }));
-M('ll-estuche', 'Estuche de pintalabios con nombre', 'Tubo con tapa de rosca y nombre incrustado.', [num('dInt', 'Ø interior', 20, 10, 40), num('alto', 'Alto cuerpo', 70, 30, 120), num('tapa', 'Alto tapa', 30, 10, 60), num('pared', 'Pared', 1.6, 1, 3, 0.2), num('holgura', 'Holgura', 0.3, 0, 0.8, 0.05), chk('rosca', 'Cierre con rosca', true), num('paso', 'Paso de rosca', 2.5, 1.5, 4, 0.5, { show: p => p.rosca }), txt('nombre', 'Nombre en la tapa', 'Ana'), fnt('fuente', 'Fuente del nombre', 'fredoka')], p => gTubo(p));
-M('ll-portapeine', 'Portapeine de pestañas', 'Tubo largo y fino con tapa de rosca.', [num('dInt', 'Ø interior', 12, 6, 25), num('alto', 'Alto cuerpo', 110, 50, 180), num('tapa', 'Alto tapa', 35, 10, 60), num('pared', 'Pared', 1.4, 1, 3, 0.2), num('holgura', 'Holgura', 0.3, 0, 0.8, 0.05), chk('rosca', 'Cierre con rosca', true), num('paso', 'Paso de rosca', 2.5, 1.5, 4, 0.5, { show: p => p.rosca }), txt('nombre', 'Nombre en la tapa', ''), fnt('fuente', 'Fuente del nombre', 'fredoka')], p => gTubo(p));
-M('bote-peq', 'Bote pequeño con tapa', 'Contenedor redondo con tapa de rosca y nombre.', [num('dInt', 'Ø interior', 30, 10, 80), num('alto', 'Alto', 25, 10, 80), num('pared', 'Pared', 1.6, 1, 3, 0.2), num('holgura', 'Holgura', 0.3, 0, 0.8, 0.05), chk('rosca', 'Cierre con rosca', true), num('paso', 'Paso de rosca', 2.5, 1.5, 4, 0.5, { show: p => p.rosca }), txt('nombre', 'Nombre en la tapa', 'Ana'), fnt('fuente', 'Fuente del nombre', 'fredoka')], p => gTubo(p, { bote: true }));
-M('bote-grande', 'Bote grande con tapa', 'Contenedor redondo grande con tapa de rosca.', [num('dInt', 'Ø interior', 70, 30, 150), num('alto', 'Alto', 60, 20, 150), num('pared', 'Pared', 2, 1, 4, 0.2), num('holgura', 'Holgura', 0.3, 0, 0.8, 0.05), chk('rosca', 'Cierre con rosca', true), num('paso', 'Paso de rosca', 2.5, 1.5, 4, 0.5, { show: p => p.rosca }), txt('nombre', 'Nombre en la tapa', 'Galletas'), fnt('fuente', 'Fuente del nombre', 'fredoka')], p => gTubo(p, { bote: true }));
-M('ll-familia', 'Colgante de nombres familiares', 'Una placa por nombre, unidas con anillas.', [area('nombres', 'Nombres (uno por línea)', 'Papá\nMamá\nLucía\nPablo'), fnt('fuente', 'Fuente', 'pacifico'), num('alto', 'Alto de placa', 18, 10, 30), num('anchoMax', 'Ancho máximo', 70, 30, 140)], p => gFamilia(p));
+M('ll-estuche', 'Estuche de pintalabios con nombre', 'Tubo con rosca, textura y nombre grabado en el cuerpo y la tapa.', [num('dInt', 'Ø interior', 20, 10, 40), num('alto', 'Alto cuerpo', 70, 30, 120), num('tapa', 'Alto tapa', 30, 10, 60), num('pared', 'Pared', 1.6, 1, 3, 0.2), num('holgura', 'Holgura', 0.3, 0, 0.8, 0.05), chk('rosca', 'Cierre con rosca', true), num('paso', 'Paso de rosca', 2.5, 1.5, 4, 0.5, { show: p => p.rosca }), txt('nombre', 'Nombre en la tapa', 'Ana'), fnt('fuente', 'Fuente del nombre', 'fredoka'), sel('textura', 'Textura del cuerpo', 'no', { no: 'Lisa', rombos: 'Rombos', panal: 'Panal', floral: 'Floral', ondas: 'Ondas', verticales: 'Estrías', mosaico: 'Mosaico' }, { show: p => p.rosca }), txt('nombreCuerpo', 'Nombre en el cuerpo (vertical)', 'Ana', { show: p => p.rosca }), fnt('fuenteCuerpo', 'Fuente del cuerpo', 'pacifico', { show: p => p.rosca && p.nombreCuerpo })], p => gTubo(p));
+M('ll-portapeine', 'Portapeine de pestañas', 'Tubo largo y fino con tapa de rosca.', [num('dInt', 'Ø interior', 12, 6, 25), num('alto', 'Alto cuerpo', 110, 50, 180), num('tapa', 'Alto tapa', 35, 10, 60), num('pared', 'Pared', 1.4, 1, 3, 0.2), num('holgura', 'Holgura', 0.3, 0, 0.8, 0.05), chk('rosca', 'Cierre con rosca', true), num('paso', 'Paso de rosca', 2.5, 1.5, 4, 0.5, { show: p => p.rosca }), txt('nombre', 'Nombre en la tapa', ''), fnt('fuente', 'Fuente del nombre', 'fredoka'), sel('textura', 'Textura del cuerpo', 'no', { no: 'Lisa', rombos: 'Rombos', panal: 'Panal', floral: 'Floral', ondas: 'Ondas', verticales: 'Estrías', mosaico: 'Mosaico' }, { show: p => p.rosca }), txt('nombreCuerpo', 'Nombre en el cuerpo (vertical)', '', { show: p => p.rosca }), fnt('fuenteCuerpo', 'Fuente del cuerpo', 'pacifico', { show: p => p.rosca && p.nombreCuerpo })], p => gTubo(p));
+M('bote-peq', 'Bote pequeño con tapa', 'Contenedor redondo con tapa de rosca y nombre.', [num('dInt', 'Ø interior', 30, 10, 80), num('alto', 'Alto', 25, 10, 80), num('pared', 'Pared', 1.6, 1, 3, 0.2), num('holgura', 'Holgura', 0.3, 0, 0.8, 0.05), chk('rosca', 'Cierre con rosca', true), num('paso', 'Paso de rosca', 2.5, 1.5, 4, 0.5, { show: p => p.rosca }), txt('nombre', 'Nombre en la tapa', 'Ana'), fnt('fuente', 'Fuente del nombre', 'fredoka'), sel('textura', 'Textura del cuerpo', 'no', { no: 'Lisa', rombos: 'Rombos', panal: 'Panal', floral: 'Floral', ondas: 'Ondas', verticales: 'Estrías', mosaico: 'Mosaico' }, { show: p => p.rosca }), txt('nombreCuerpo', 'Nombre en el cuerpo (vertical)', '', { show: p => p.rosca }), fnt('fuenteCuerpo', 'Fuente del cuerpo', 'pacifico', { show: p => p.rosca && p.nombreCuerpo })], p => gTubo(p, { bote: true }));
+M('bote-grande', 'Bote grande con tapa', 'Contenedor redondo grande con tapa de rosca y textura.', [num('dInt', 'Ø interior', 70, 30, 150), num('alto', 'Alto', 60, 20, 150), num('pared', 'Pared', 2, 1, 4, 0.2), num('holgura', 'Holgura', 0.3, 0, 0.8, 0.05), chk('rosca', 'Cierre con rosca', true), num('paso', 'Paso de rosca', 2.5, 1.5, 4, 0.5, { show: p => p.rosca }), txt('nombre', 'Nombre en la tapa', 'Galletas'), fnt('fuente', 'Fuente del nombre', 'fredoka'), sel('textura', 'Textura del cuerpo', 'no', { no: 'Lisa', rombos: 'Rombos', panal: 'Panal', floral: 'Floral', ondas: 'Ondas', verticales: 'Estrías', mosaico: 'Mosaico' }, { show: p => p.rosca }), txt('nombreCuerpo', 'Nombre en el cuerpo (vertical)', '', { show: p => p.rosca }), fnt('fuenteCuerpo', 'Fuente del cuerpo', 'pacifico', { show: p => p.rosca && p.nombreCuerpo })], p => gTubo(p, { bote: true }));
+M('ll-familia', 'Colgante de nombres familiares', 'Una placa por nombre (corazones, huella…), unidas con anillas.', [area('nombres', 'Nombres (uno por línea)', 'Familia\nAline\nAlex\nElisa\nToby'), sel('forma', 'Forma de las placas', 'mixto', { mixto: 'Corazones y huella al final', corazon: 'Corazones', capsula: 'Cápsulas', ovalo: 'Óvalos', nube: 'Nubes' }), fnt('fuente', 'Fuente', 'pacifico'), num('alto', 'Alto de placa', 18, 10, 30), num('anchoMax', 'Ancho máximo', 70, 30, 140)], p => gFamilia(p));
 
 // Cumpleaños
-M('topper', 'Topper de tarta', 'Número y nombre con palitos.', [txt('numero', 'Número / texto grande', '3'), txt('nombre', 'Nombre', 'ELISA'), fnt('fuente', 'Fuente', 'luckiest'), num('ancho', 'Ancho del nombre', 110, 50, 200), num('contorno', 'Contorno', 3, 1, 6), num('grosor', 'Grosor', 2.6, 1.6, 5, 0.2), num('capa', 'Capa de texto (0 = una pieza)', 1, 0, 3, 0.2), sel('palitos', 'Palitos', 2, { 1: 'Uno', 2: 'Dos' }), num('largo', 'Largo palitos', 60, 30, 100)], p => gTopper(p));
+M('topper', 'Topper de tarta', 'Número, nombre e icono, con palitos.', [txt('numero', 'Número / texto grande', '3'), txt('nombre', 'Nombre', 'ELISA'), txt('icono', 'Icono (emoji)', '👑'), fnt('fuente', 'Fuente', 'luckiest'), num('ancho', 'Ancho del nombre', 110, 50, 200), num('contorno', 'Contorno', 3, 1, 6), num('grosor', 'Grosor', 2.6, 1.6, 5, 0.2), num('capa', 'Capa de texto (0 = una pieza)', 1, 0, 3, 0.2), sel('palitos', 'Palitos', 2, { 1: 'Uno', 2: 'Dos' }), num('largo', 'Largo palitos', 60, 30, 100)], p => gTopper(p));
 M('topper-circ', 'Topper circular con ventana', 'Aro con hueco para purpurina, número y nombre.', [txt('numero', 'Número', '3'), txt('nombre', 'Nombre', 'ELISA'), fnt('fuente', 'Fuente', 'luckiest'), num('diametro', 'Diámetro', 100, 60, 180), num('largo', 'Largo palito', 55, 30, 100)], p => gTopperCirc(p));
 M('palillos', 'Soporte para palillos', 'Base con tubo para sujetar figuras en palillo.', [shp('circulo', ['circulo', 'flor', 'estrella', 'corazon', 'hexagono']), num('diametro', 'Tamaño base', 55, 30, 100), sel('base', 'Base', 'fina', { fina: 'Fina', gruesa: 'Gruesa' }), num('dPalillo', 'Ø palillo', 4, 2, 8, 0.2), num('hTubo', 'Alto tubo', 22, 10, 50)], p => gPalillos(p));
 M('soporte-foto', 'Soporte de foto con nombre', 'Base con ranura para una foto o tarjeta.', [txt('texto', 'Texto', 'ELISA'), fnt('fuente', 'Fuente', 'luckiest'), num('ancho', 'Ancho', 90, 50, 180), num('alto', 'Alto base', 9, 6, 16)], p => gSoporteFoto(p));
 M('cuadro', 'Cuadro con marco y peana', 'Marco con foto o tela deslizable y peana.', [shp('arco', ['rect', 'arco', 'cuadrado']), num('fotoAncho', 'Ancho de foto', 70, 30, 150), num('fotoAlto', 'Alto de foto', 90, 30, 200), num('borde', 'Borde', 8, 4, 16), txt('texto', 'Texto inferior', 'Elisa'), fnt('fuente', 'Fuente', 'pacifico'), STAND()], p => gMarco(p));
 M('cuadro-tela', 'Cuadro de tela', 'Marco en el que la tela o lámina entra por arriba y queda tensa.', [shp('rect', ['rect', 'arco', 'cuadrado']), num('fotoAncho', 'Ancho de la tela', 80, 30, 150), num('fotoAlto', 'Alto de la tela', 100, 30, 200), num('borde', 'Borde', 9, 4, 16), txt('texto', 'Texto inferior', 'Elisa'), fnt('fuente', 'Fuente', 'pacifico'), STAND()], p => gMarco(p), { note: 'Corta la tela 1 mm más pequeña que la medida y deslízala por la ranura superior; queda tensa entre la trasera y el frente.' });
-M('tarta', 'Soporte de tarta', 'Plato y pie encajables (torno).', [num('diametro', 'Ø plato', 160, 80, 250), num('dPie', 'Ø pie', 90, 50, 150), num('dColumna', 'Ø columna', 30, 16, 60), num('alto', 'Alto', 60, 20, 150)], p => gTarta(p));
+M('tarta', 'Soporte de tarta', 'Plato con borde ondulado y pie estriado, encajables.', [num('diametro', 'Ø plato', 180, 80, 250), sel('borde', 'Borde del plato', 'ondulado', { ondulado: 'Ondulado', liso: 'Liso' }), num('dPie', 'Ø pie', 110, 50, 150), num('dColumna', 'Ø columna', 36, 16, 60), num('alto', 'Alto', 70, 20, 150), cnt('estrias', 'Estrías del pie (0 = liso)', 28, 0, 60), num('estria', 'Profundidad de estría', 4, 1, 8)], p => gTarta(p));
 M('multicapa', 'Letrero multicapa desde imagen', 'Tres capas a partir de una imagen.', [img('img', 'Imagen', 'color'), UMB, num('ancho', 'Tamaño', 110, 40, 200), num('offset', 'Contorno exterior', 3, 1, 8)], p => gMulticapa(p));
 
 // Recuerdito
@@ -934,7 +1100,8 @@ M('lamp-social', 'Lámpara LED @usuario', 'Panel con tu @ que se ilumina desde l
 // Cortadores
 M('cortador', 'Cortador de galletas', 'Desde forma, texto o imagen; con sello opcional.', [sel('modo', 'Contorno desde', 'forma', { forma: 'Forma', texto: 'Silueta del texto', imagen: 'Imagen' }), shp('conejo', ['circulo', 'corazon', 'estrella', 'conejo', 'flor', 'nube', 'galleta', 'arbol', 'casa', 'lazo', 'hueso', 'pez', 'huella', 'cuadrado', 'hexagono', 'gota'], 'forma', 'Forma'),
   txt('texto', 'Texto (sello / silueta)', 'Ana'), fnt('fuente', 'Fuente', 'fredoka'), img('img', 'Imagen', 'silueta', { show: p => p.modo === 'imagen' }), { ...UMB, show: p => p.modo === 'imagen' }, chk('marcas', 'Marcas interiores (imagen)', true, { show: p => p.modo === 'imagen' }),
-  num('tam', 'Tamaño', 70, 30, 140), num('alto', 'Altura de corte', 14, 8, 25), num('pared', 'Grosor de cuchilla', 0.9, 0.6, 1.6, 0.1), num('pestana', 'Pestaña superior', 3, 1.5, 6), chk('sello', 'Incluir sello de marcado', true), num('relieve', 'Relieve del sello', 2.5, 1, 5, 0.5)], p => gCortador(p));
+  num('tam', 'Tamaño', 70, 30, 140), num('alto', 'Altura de corte', 14, 8, 25), num('pared', 'Grosor de cuchilla', 0.9, 0.6, 1.6, 0.1), num('pestana', 'Pestaña superior', 3, 1.5, 6), chk('sello', 'Incluir sello de marcado', true), num('relieve', 'Relieve del sello', 2.5, 1, 5, 0.5), sel('hueco', 'Hueco interior', 'no', { no: 'Sin hueco', corazon: 'Corazón', circulo: 'Círculo', estrella: 'Estrella', flor: 'Flor' }), num('tamHueco', 'Tamaño del hueco', 25, 10, 50, 1, { unit: '%', show: p => p.hueco !== 'no' }), num('posHueco', 'Posición vertical del hueco', 10, -40, 40, 1, { show: p => p.hueco !== 'no' })], p => gCortador(p));
+M('cortador-hueco', 'Cortador con hueco interior', 'Galleta con un hueco (corazón, círculo…) recortado dentro.', [sel('modo', 'Contorno desde', 'forma', { forma: 'Forma', texto: 'Silueta del texto', imagen: 'Imagen' }), shp('conejo', ['circulo', 'corazon', 'estrella', 'conejo', 'flor', 'nube', 'galleta', 'arbol', 'casa', 'hueso', 'huella', 'cuadrado'], 'forma', 'Forma'), txt('texto', 'Texto', ''), fnt('fuente', 'Fuente', 'fredoka'), img('img', 'Imagen', 'silueta', { show: p => p.modo === 'imagen' }), { ...UMB, show: p => p.modo === 'imagen' }, chk('marcas', 'Marcas interiores', false), num('tam', 'Tamaño', 80, 30, 140), num('alto', 'Altura de corte', 14, 8, 25), num('pared', 'Cuchilla', 0.9, 0.6, 1.6, 0.1), num('pestana', 'Pestaña', 3, 1.5, 6), chk('sello', 'Sello', false), num('relieve', 'Relieve', 2.5, 1, 5, 0.5), sel('hueco', 'Hueco interior', 'corazon', { corazon: 'Corazón', circulo: 'Círculo', estrella: 'Estrella', flor: 'Flor' }), num('tamHueco', 'Tamaño del hueco', 22, 10, 50, 1, { unit: '%' }), num('posHueco', 'Posición vertical del hueco', 12, -40, 40, 1)], p => gCortador(p));
 M('cort-grid', 'Cortador de rectángulos en cuadrícula', 'Corta muchas porciones iguales de una vez.', [cnt('cols', 'Columnas', 4, 1, 10), cnt('filas', 'Filas', 3, 1, 10), num('celdaX', 'Ancho de porción', 30, 10, 80), num('celdaY', 'Alto de porción', 30, 10, 80), num('alto', 'Altura', 18, 8, 30), num('pared', 'Cuchilla', 0.9, 0.6, 1.6, 0.1), num('pestana', 'Refuerzo exterior', 3, 1.5, 6)], p => gCortGrid(p));
 const SELLO = (o = {}) => [sel('modo', 'Contenido', o.modo || 'imagen', { imagen: 'Imagen', texto: 'Texto' }), img('img', 'Imagen', 'logo', { show: p => p.modo === 'imagen' }), { ...UMB, show: p => p.modo === 'imagen' }, txt('texto', 'Texto', o.texto || 'Hecho a mano', { show: p => p.modo === 'texto' }), fnt('fuente', 'Fuente', 'pacifico', { show: p => p.modo === 'texto' }),
   ...(o.forma ? [shp(o.forma, ['circulo', 'rect', 'cuadrado', 'corazon', 'flor', 'nube'])] : []), num('diametro', o.forma ? 'Ancho' : 'Diámetro', o.d || 40, 15, 120), ...(o.forma ? [num('alto', 'Alto (rectángulo)', 30, 10, 120)] : []), num('relieve', 'Relieve', o.rel || 2, 0.6, 5, 0.2), chk('bordeSello', 'Borde', o.borde ?? true), chk('mango', 'Mango', o.mango ?? true)];
@@ -982,6 +1149,7 @@ M('mp-geometrico', 'Marcapáginas geométrico', 'Rombos en relieve.', MP, p => g
 M('mp-imagen', 'Marcapáginas con imagen', 'Tu dibujo arriba y el nombre.', [...MP, img('img', 'Imagen', 'silueta'), UMB], p => gMarcapaginas(p, { estilo: 'imagen' }));
 M('mp-silueta', 'Marcapáginas con silueta (castillo)', 'La parte de arriba asoma del libro con la silueta que quieras.', [...MP, img('img', 'Silueta', 'castillo'), UMB], p => gMarcapaginas(p, { estilo: 'silueta' }));
 M('tarjeta', 'Tarjeta de presentación', 'Tarjeta de 85 × 55 mm con QR opcional.', [txt('nombre', 'Nombre', 'Maria Bravo'), fnt('fuente', 'Fuente del nombre', 'montserrat'), txt('cargo', 'Cargo', 'Desarrolladora Full Stack'), area('datos', 'Datos de contacto', 'mariaba.pages.dev\ngithub.com/laloba04'), chk('qr', 'Incluir QR', true), txt('url', 'Enlace del QR', 'https://mariaba.pages.dev', { show: p => p.qr })], p => gTarjeta(p));
+M('tarjeta-tela', 'Tarjeta de presentación con tela', 'Fondo con textura de tejido y texto en relieve.', [txt('nombre', 'Nombre', '@tumarca'), fnt('fuente', 'Fuente del nombre', 'righteous'), txt('cargo', 'Cargo / lema', 'Modelos 3D personalizados'), area('datos', 'Datos de contacto', 'tumarca.com'), chk('qr', 'Incluir QR', true), txt('url', 'Enlace del QR', 'https://', { show: p => p.qr }), sel('textura', 'Textura', 'cuadricula', { cuadricula: 'Lino', rombos: 'Rombos', diagonales: 'Sarga', panal: 'Panal' })], p => gTarjeta(p));
 M('soporte-tarjetas', 'Soporte de tarjetas', 'Tarjetero de mesa con tu nombre.', [txt('texto', 'Texto', '@tumarca'), fnt('fuente', 'Fuente', 'righteous')], p => gSoporteTarjetas(p));
 M('portaboli', 'Porta-bolígrafos de rejilla', 'Huecos cuadrados para rotuladores.', [cnt('cols', 'Columnas', 5, 1, 12), cnt('filas', 'Filas', 5, 1, 12), num('celda', 'Hueco', 15, 8, 40), num('alto', 'Alto', 80, 20, 150), num('pared', 'Pared', 1.6, 1, 4, 0.2), num('suelo', 'Suelo', 2, 1, 5, 0.2), sel('tipo', 'Tipo', 'rect', { rect: 'Cuadrado', hex: 'Panal' })], p => gOrganizador(p));
 M('organizador-hex', 'Organizador de panal', 'Celdas hexagonales.', [cnt('cols', 'Columnas', 4, 1, 10), cnt('filas', 'Filas', 3, 1, 10), num('celda', 'Celda', 30, 12, 60), num('alto', 'Alto', 70, 20, 150), num('pared', 'Pared', 1.8, 1, 4, 0.2), num('suelo', 'Suelo', 2, 1, 5, 0.2), sel('tipo', 'Tipo', 'hex', { rect: 'Cuadrado', hex: 'Panal' })], p => gOrganizador(p));
@@ -1033,26 +1201,62 @@ const BANDNOTE = 'Cajita de malla: imprime las mallas en plano, caliéntalas y p
 for (const [id, nm, forma, tam, alto] of [['tb-corazon', 'Corazón termoformado', 'corazon', 80, 22], ['tb-cuadrado', 'Cuadrado liso termoformado', 'cuadrado', 75, 20], ['tb-estrella', 'Estrella termoformada', 'estrella', 85, 18], ['tb-flor', 'Flor termoformada', 'flor', 80, 18], ['tb-lazo', 'Lazo termoformado', 'lazo', 90, 14], ['tb-arbol', 'Árbol de Navidad termoformado', 'arbol', 70, 14]])
   M(id, nm, 'Figura de malla para imprimir y moldes macho y hembra para darle forma de cajita.', BAND(forma, tam, alto), p => gTermo(p), { note: BANDNOTE });
 
+
+// Abrelatas con cabeza personalizable
+const ABR = (o = {}) => [sel('cabeza', 'Diseño', o.cabeza || 'imagen', { imagen: 'Imagen', texto: 'Texto en placa', flor: 'Flor multicolor', esmalte: 'Bote de esmalte', lazo_rosa: 'Lazo solidario', corazon: 'Corazón', estrella: 'Estrella', circulo: 'Círculo' }),
+  img('img', 'Imagen', o.demo || 'logo', { show: p => p.cabeza === 'imagen' }), { ...UMB, show: p => p.cabeza === 'imagen' }, txt('texto', 'Texto / icono', o.texto ?? '', { show: p => p.cabeza !== 'imagen' && p.cabeza !== 'flor' && p.cabeza !== 'lazo_rosa' }), fnt('fuente', 'Fuente', o.fuente || 'righteous', { show: p => p.cabeza !== 'imagen' && p.cabeza !== 'flor' && p.cabeza !== 'lazo_rosa' }),
+  num('tam', 'Tamaño de la figura', o.tam || 34, 20, 60), num('borde', 'Borde', o.borde ?? 2, 0.6, 5, 0.2), chk('nfc', 'Hueco para NFC', !!o.nfc), num('dNfc', 'Ø etiqueta NFC', 20, 12, 30, 1, { show: p => p.nfc }), num('eNfc', 'Grosor hueco NFC', 1, 0.4, 2, 0.1, { show: p => p.nfc })];
+M('abre-gen', 'Generador de abrelatas', 'Llavero abrelatas con cualquier imagen, texto o figura.', ABR(), p => gAbrelatas2(p));
+M('abre-lazo', 'Abrelatas lazo solidario', 'El lazo de octubre rosa.', ABR({ cabeza: 'lazo_rosa', tam: 38 }), p => gAbrelatas2({ ...p, color2: C.rosa }));
+M('abre-rect', 'Abrelatas rectángulo', 'Placa con tu @ o tu nombre.', ABR({ cabeza: 'texto', texto: '@tumarca', tam: 40 }), p => gAbrelatas2(p));
+M('abre-flor', 'Abrelatas flor multicolor', 'Flor con pétalos y centro de colores.', ABR({ cabeza: 'flor', tam: 36 }), p => gAbrelatas2({ ...p, color2: C.lila }));
+M('abre-borde', 'Abrelatas con borde', 'Texto sobre placa con borde de otro color.', ABR({ cabeza: 'texto', texto: '@tumarca', borde: 3, tam: 40 }), p => gAbrelatas2({ ...p, color1: C.rosa, color2: C.blanco, color3: C.rosa }));
+M('abre-esmalte', 'Abrelatas esmalte', 'Bote de esmalte con un corazón o tu inicial.', ABR({ cabeza: 'esmalte', texto: '♥', fuente: 'luckiest', tam: 40 }), p => gAbrelatas2(p));
+M('abre-nfc', 'Abrelatas NFC', 'Abrelatas con etiqueta NFC escondida.', ABR({ cabeza: 'texto', texto: 'NFC', fuente: 'luckiest', nfc: true, tam: 40 }), p => gAbrelatas2(p));
+// Rattan
+const RAT = (o = {}) => [num('paso', 'Tamaño de la rejilla', 4.2, 2.6, 8, 0.2), num('marco', 'Ancho del marco', 4, 2, 8, 0.5), num('grosor', 'Grosor del marco', 5, 2, 12, 0.5), num('grosorRattan', 'Grosor del rattan', 1.4, 0.8, 3, 0.1)];
+M('rattan-letras', 'Letras de rattan', 'Un marco de rattan por letra.', [txt('texto', 'Texto', 'ELISA'), fnt('fuente', 'Fuente', 'anton'), num('altura', 'Alto de letra', 120, 50, 220), ...RAT()], p => gRattan(p, { v: 'letras' }));
+M('rattan-base', 'Letra de rattan con base', 'Inicial de rattan con el nombre y peana.', [txt('letra', 'Letra', 'N'), fnt('fuente', 'Fuente de la letra', 'anton'), num('altura', 'Alto de letra', 110, 50, 200), txt('nombre', 'Nombre', 'Noah'), fnt('fuenteNombre', 'Fuente del nombre', 'pacifico'), ...RAT()], p => gRattan(p, { v: 'base' }));
+M('rattan-pared', 'Letra de rattan para la pared', 'Inicial con nombre y anillas para colgar.', [txt('letra', 'Letra', 'E'), fnt('fuente', 'Fuente de la letra', 'anton'), num('altura', 'Alto de letra', 130, 50, 220), txt('nombre', 'Nombre', 'Elisa'), fnt('fuenteNombre', 'Fuente del nombre', 'pacifico'), ...RAT()], p => gRattan(p, { v: 'pared' }));
+M('rattan-panel', 'Panel de rattan', 'Panel rectangular de rejilla, para puertas o cajas.', [num('ancho', 'Ancho', 150, 40, 240), num('alto', 'Alto', 110, 40, 240), ...RAT()], p => gRattan(p, { v: 'panel' }));
+// Llavero desde imagen
+const LLIMG = (nfc) => [img('img', 'Imagen', 'color'), num('tam', 'Tamaño', 42, 20, 80), txt('texto', 'Texto debajo (opcional)', ''), fnt('fuente', 'Fuente', 'luckiest'), num('borde', 'Borde', 2.2, 0.8, 5, 0.2), ...HOLE('arriba'), chk('nfc', 'Hueco para NFC', nfc), num('dNfc', 'Ø etiqueta NFC', 25, 12, 30, 1, { show: p => p.nfc }), num('eNfc', 'Grosor hueco NFC', 1, 0.4, 2, 0.1, { show: p => p.nfc })];
+M('ll-imagen', 'Generador de llavero', 'Llavero a partir de cualquier imagen, en varios colores.', LLIMG(false), p => gLlaveroImagen(p));
+M('ll-imagen-nfc', 'Generador de llavero NFC', 'Llavero de imagen con etiqueta NFC escondida.', LLIMG(true), p => gLlaveroImagen(p));
+M('rosa-nombre', 'Rosa con nombre', 'Rosa de línea y nombre en caligrafía, de una pieza.', [txt('texto', 'Nombre', 'mamá'), fnt('fuente', 'Fuente', 'dancing'), num('ancho', 'Ancho del nombre', 55, 25, 140), num('borde', 'Contorno', 1.8, 0.8, 4, 0.2), ...HOLE('izq')], p => gRosaNombre(p));
+M('ll-conejo-varios', 'Llaveros conejo (hasta 9 nombres)', 'Un conejo por nombre, todos en la misma bandeja.', [area('nombres', 'Nombres (uno por línea)', 'Elisa\nClara\nLeo\nMaju'), num('ancho', 'Ancho', 36, 25, 60), num('alto', 'Alto', 48, 30, 80), fnt('fuente', 'Fuente', 'pacifico'), num('borde', 'Borde', 1.2, 0, 3, 0.2), num('hBase', 'Grosor', 2.6, 1.2, 5, 0.2), num('hRel', 'Relieve', 1, 0.4, 3, 0.2), ...HOLE('arriba')], p => gVarios(p, q => gPlaca(q, { forma: 'conejo', c1: C.lila })));
+M('ll-zanahoria-varios', 'Llaveros zanahoria (hasta 9 nombres)', 'Una zanahoria por nombre.', [area('nombres', 'Nombres (uno por línea)', 'Cecilia\nNoah\nElisa\nLaura'), num('ancho', 'Ancho', 62, 40, 90), num('alto', 'Alto', 26, 18, 40), fnt('fuente', 'Fuente', 'pacifico'), num('borde', 'Borde', 0, 0, 3, 0.2), num('hBase', 'Grosor', 2.6, 1.2, 5, 0.2), num('hRel', 'Relieve', 1, 0.4, 3, 0.2), ...HOLE('izq')], p => gVarios(p, q => gPlaca(q, { forma: 'zanahoria', c1: C.naranja })));
+
+
+M('sellos-plastilina', 'Sellos para plastilina con caja', 'Sellos redondos con dibujos y una caja para guardarlos.', [txt('iconos', 'Dibujos (emojis o letras, separados por comas)', '⭐,🐱,🌸,🦋,🐶,❤'), fnt('fuente', 'Fuente (para letras)', 'luckiest'), num('diametro', 'Diámetro', 30, 18, 50), num('relieve', 'Relieve', 2, 1, 4, 0.2), chk('caja', 'Incluir caja', true)], p => gSellosPlastilina(p));
+M('test-tolerancia', 'Test de tolerancia', 'Agujeros con holgura de 0,1 a 0,5 mm y sus pivotes.', [num('diametro', 'Ø del pivote', 10, 5, 20)], p => gTestTolerancia(p));
+M('test-cubo', 'Cubo de calibración', 'Cubo para comprobar las medidas de la impresora.', [num('lado', 'Lado', 20, 10, 40)], p => gTestCubo(p));
+M('test-puentes', 'Test de puentes', 'Puentes de 10 a 50 mm para ajustar la refrigeración.', [], p => gTestPuentes(p));
+M('test-rosca', 'Test de rosca', 'Tornillo y tuerca con tres holguras distintas.', [num('diametro', 'Ø del tornillo', 16, 10, 30)], p => gTestRosca(p));
+
 /* próximamente (necesitan geometría esculpida) */
 const SOON = {};
 for (const [id, name] of Object.entries(SOON)) MODELS['soon-' + id] = { id: 'soon-' + id, name, desc: 'Próximamente', soon: true, params: [] };
 
 const CATEGORIES = [
-  { id: 'llaveros', name: 'Llaveros', icon: '🔑', desc: 'Con nombre, logo, foto o NFC.', models: ['ll-nombre', 'll-3col', 'll-superpuesto', 'll-icono', 'll-rect', 'll-completo', 'll-nfc', 'll-nfc-dibujo', 'carrete-nfc', 'll-conejo', 'll-zanahoria', 'll-espejo', 'll-rosa', 'll-resina', 'll-abrelatas', 'chapa-llavero', 'll-estuche', 'll-portapeine', 'bote-peq'] },
+  { id: 'llaveros', name: 'Llaveros', icon: '🔑', desc: 'Con nombre, logo, foto o NFC.', models: ['ll-imagen', 'll-imagen-nfc', 'abre-gen', 'abre-nfc', 'll-nombre', 'll-3col', 'll-superpuesto', 'll-icono', 'll-rect', 'll-completo', 'll-nfc', 'll-nfc-dibujo', 'carrete-nfc', 'll-conejo', 'll-conejo-varios', 'll-zanahoria', 'll-zanahoria-varios', 'rosa-nombre', 'll-espejo', 'll-rosa', 'll-resina', 'chapa-llavero', 'll-estuche', 'll-portapeine', 'bote-peq'] },
   { id: 'cumple', name: 'Cumpleaños', icon: '🎂', desc: 'Toppers, soportes y decoración de mesa.', models: ['topper', 'topper-circ', 'palillos', 'soporte-foto', 'cuadro', 'cuadro-tela', 'tarta', 'col-relieve', 'multicapa'] },
-  { id: 'recuerdito', name: 'Recuerdos', icon: '🎁', desc: 'Detalles con nombre para fiestas, clientes y fechas especiales.', models: ['ll-espejo', 'placa-lineart', 'caja', 'cuadro', 'll-rosa', 'll-estuche', 'bote-grande', 'll-portapeine', 'medallon', 'chapa-iman', 'caja-sellos', 'galleta', 'placa-rayas', 'chapa-test', 'll-familia', 'll-abrelatas', 'bote-peq', 'chapa-llavero', 'litofania', 'termo', 'micro', 'exhibidor', 'rosa3d', 'panuelos', 'cuadro-tela', 'carrete-nfc'] },
+  { id: 'recuerdito', name: 'Recuerdos', icon: '🎁', desc: 'Detalles con nombre para fiestas, clientes y fechas especiales.', models: ['ll-espejo', 'placa-lineart', 'caja', 'cuadro', 'll-rosa', 'll-estuche', 'bote-grande', 'll-portapeine', 'medallon', 'chapa-iman', 'caja-sellos', 'sellos-plastilina', 'galleta', 'placa-rayas', 'chapa-test', 'll-familia', 'll-abrelatas', 'bote-peq', 'chapa-llavero', 'litofania', 'termo', 'rosa-nombre', 'abre-gen', 'micro', 'exhibidor', 'rosa3d', 'panuelos', 'cuadro-tela', 'carrete-nfc'] },
   { id: 'stringart', name: 'String Art', icon: '🧵', desc: 'Efecto de hilos tensados con tu nombre.', models: ['sa-corazon', 'sa-rect', 'sa-social'] },
-  { id: 'letra', name: 'Letra grande', icon: '🔠', desc: 'Inicial decorativa con nombre, texturas o LED.', models: ['letra-nombre', 'letra-hundido', 'letra-resina', 'letra-textura', 'letra-fondo', 'letra-floral', 'letra-lampara'] },
+  { id: 'letra', name: 'Letra grande', icon: '🔠', desc: 'Inicial decorativa con nombre, texturas, rattan o LED.', models: ['rattan-base', 'rattan-pared', 'letra-nombre', 'letra-hundido', 'letra-resina', 'letra-textura', 'letra-fondo', 'letra-floral', 'letra-lampara'] },
   { id: 'qr', name: 'Código QR', icon: '🔳', desc: 'Placas para Wi-Fi, WhatsApp, redes y reseñas.', models: ['qr-texto', 'qr-logo', 'qr-wifi', 'qr-whatsapp', 'qr-resenas', 'qr-redes', 'qr-pago', 'qr-lista', 'qr-lista-capas'] },
-  { id: 'navidad', name: 'Navidad', icon: '🎄', desc: 'Adornos con nombre, foto o dibujo.', models: ['nav-portarretrato', 'nav-portafotos', 'nav-copo', 'nav-galleta', 'nav-medallon', 'chapa-iman', 'chapa-llavero', 'termo-nav', 'termo-copo'] },
+  { id: 'navidad', name: 'Navidad', icon: '🎄', desc: 'Adornos con nombre, foto o dibujo.', models: ['nav-portarretrato', 'nav-portafotos', 'nav-copo', 'nav-galleta', 'nav-medallon', 'chapa-nav-iman', 'chapa-nav-llavero', 'termo-nav', 'termo-copo'] },
+  { id: 'abrelatas', name: 'Abrelatas', icon: '🥫', desc: 'Llaveros abrelatas con tu imagen, texto o NFC.', models: ['abre-gen', 'abre-lazo', 'abre-rect', 'abre-flor', 'abre-borde', 'abre-esmalte', 'abre-nfc', 'll-abrelatas'] },
+  { id: 'rattan', name: 'Rattan', icon: '🪺', desc: 'Letras y paneles con rejilla de rattan.', models: ['rattan-letras', 'rattan-base', 'rattan-pared', 'rattan-panel'] },
+  { id: 'pruebas', name: 'Archivos de prueba', icon: '📏', desc: 'Calibración, tolerancias y roscas para ajustar tu impresora.', hidden: true, models: ['test-tolerancia', 'test-cubo', 'test-puentes', 'test-rosca', 'chapa-test'] },
   { id: 'termoformado', name: 'Termoformado', icon: '🧺', desc: 'Figuras de malla impresas que se moldean en caliente, con sus moldes macho y hembra.', models: ['termo', 'tb-corazon', 'tb-cuadrado', 'tb-estrella', 'tb-flor', 'tb-lazo', 'tb-arbol', 'termo-nav', 'termo-copo'] },
   { id: 'mascotas', name: 'Mascotas', icon: '🐾', desc: 'Placas de identificación con nombre y teléfono.', models: ['pet-ovalada', 'pet-ondulada', 'pet-hueso', 'pet-pez', 'pet-huella', 'pet-forma'] },
   { id: 'lamparas', name: 'Lámparas', icon: '💡', desc: 'Lámparas LED con tu nombre o @.', models: ['letra-lampara', 'lamp-social'] },
-  { id: 'cortadores', name: 'Cortadores', icon: '🍪', desc: 'Cortadores de galletas y sellos.', models: ['cortador', 'cort-grid', 'sello-circ', 'sello-brig', 'sello-letras', 'eyector', 'eyector-cupula', 'eyector-escala', 'eyector-caramelo', 'rodillo', 'rodillo-mosaico', 'cuenco'] },
-  { id: 'letreros', name: 'Letreros', icon: '🪧', desc: 'Palabras, nombres y @ en capas de 2 o 3 colores.', models: ['let-2', 'let-3', 'let-offset', 'let-sep2', 'let-sep3', 'let-colocacion', 'let-corazon', 'let-2lin-img', 'let-2lin-img3', 'let-superpuesto', 'soc-2', 'soc-3', 'soc-rect2', 'soc-rect3', 'soc-qr', 'placa-prof', 'multicapa', 'cuadro', 'soporte-foto', 'trofeo'] },
-  { id: 'chapas', name: 'Chapas', icon: '📍', desc: 'Llaveros e imanes para tus chapas.', models: ['chapa-llavero', 'chapa-iman', 'chapa-test'] },
+  { id: 'cortadores', name: 'Cortadores', icon: '🍪', desc: 'Cortadores de galletas y sellos.', models: ['cortador', 'cortador-hueco', 'cort-grid', 'sellos-plastilina', 'sello-circ', 'sello-brig', 'sello-letras', 'eyector', 'eyector-cupula', 'eyector-escala', 'eyector-caramelo', 'rodillo', 'rodillo-mosaico', 'cuenco'] },
+  { id: 'letreros', name: 'Letreros', icon: '🪧', desc: 'Palabras, nombres y @ en capas de 2 o 3 colores.', models: ['rattan-letras', 'let-2', 'let-3', 'let-offset', 'let-sep2', 'let-sep3', 'let-colocacion', 'let-corazon', 'let-2lin-img', 'let-2lin-img3', 'let-superpuesto', 'soc-2', 'soc-3', 'soc-rect2', 'soc-rect3', 'soc-qr', 'placa-prof', 'multicapa', 'cuadro', 'soporte-foto', 'trofeo'] },
+  { id: 'chapas', name: 'Chapas', icon: '📍', desc: 'Llaveros e imanes para tus chapas.', models: ['chapa-llavero', 'chapa-iman', 'chapa-nav-llavero', 'chapa-nav-iman', 'chapa-test'] },
   { id: 'colorear', name: 'Colorear', icon: '🖍️', desc: 'Para pintar a partir de cualquier dibujo, y puzles.', models: ['col-relieve', 'col-hundida-forma', 'col-hundida-offset', 'col-2partes', 'puzzle', 'multipartes'] },
-  { id: 'oficina', name: 'Oficina', icon: '✏️', desc: 'Portalápices, marcapáginas, tarjetas y placas.', models: ['portalapices', 'mp-floral', 'mp-elegante', 'mp-geometrico', 'mp-imagen', 'sello-molde-img', 'sello-molde-txt', 'cuadro', 'tarjeta', 'soporte-tarjetas', 'portaboli', 'organizador-hex', 'placa-prof', 'rascar', 'panuelos', 'mp-silueta', 'cuadro-tela'] },
+  { id: 'oficina', name: 'Oficina', icon: '✏️', desc: 'Portalápices, marcapáginas, tarjetas y placas.', models: ['portalapices', 'mp-floral', 'mp-elegante', 'mp-geometrico', 'mp-imagen', 'sello-molde-img', 'sello-molde-txt', 'cuadro', 'tarjeta', 'tarjeta-tela', 'soporte-tarjetas', 'portaboli', 'organizador-hex', 'placa-prof', 'rascar', 'panuelos', 'mp-silueta', 'cuadro-tela'] },
 ];
 return { MODELS, CATEGORIES, C };
 })();

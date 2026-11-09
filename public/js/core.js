@@ -56,7 +56,7 @@ function frame(W, H, opt = {}) {
   F.disk = (x, y, r) => F.draw(c => { c.beginPath(); c.arc(x, y, Math.max(r, 0.01), 0, Math.PI * 2); c.fill(); });
   F.rect = (x0, y0, x1, y1, r = 0) => F.draw(c => { roundRect(c, Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0), r); c.fill(); });
   F.rectC = (cx, cy, rw, rh, r = 0) => F.rect(cx - rw / 2, cy - rh / 2, cx + rw / 2, cy + rh / 2, r);
-  F.shape = (kind, cx, cy, sw, sh, rot = 0) => F.draw(c => { c.translate(cx, cy); c.rotate(rot); shapePath(c, kind, 0, 0, sw, sh ?? sw); c.fill('nonzero'); });
+  F.shape = (kind, cx, cy, sw, sh, rot = 0) => F.draw(c => { c.translate(cx, cy); c.rotate(rot); if (STROKE_SHAPES[kind]) STROKE_SHAPES[kind](c, sw, sh ?? sw); else { shapePath(c, kind, 0, 0, sw, sh ?? sw); c.fill('nonzero'); } });
   /* texto: bloque centrado en (cx,cy) con cuerpo de letra size (mm) */
   F.text = (lines, f, size, cx = 0, cy = 0, o = {}) => {
     const lh = o.lh || 1.15; const m = measure(lines, f, lh);
@@ -231,12 +231,17 @@ function circ(c, x, y, r) { c.moveTo(x + r, y); c.arc(x, y, r, 0, Math.PI * 2); 
 function ell(c, x, y, rx, ry, rot = 0) { c.moveTo(x + rx * Math.cos(rot), y + rx * Math.sin(rot)); c.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2); }
 function regPoly(n, R, rot, cx = 0, cy = 0) { return [...Array(n)].map((_, k) => { const a = rot + k * 2 * Math.PI / n; return [cx + R * Math.cos(a), cy + R * Math.sin(a)]; }); }
 function star(n, R, ri, cx = 0, cy = 0) { const p = []; for (let k = 0; k < 2 * n; k++) { const a = -Math.PI / 2 + k * Math.PI / n; const r = k % 2 ? ri : R; p.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); } return p; }
+/* formas dibujadas con trazo grueso */
+const STROKE_SHAPES = {
+  lazo_rosa: (c, w, h) => { const W = w / 2, H = h / 2; c.lineWidth = w * 0.24; c.lineCap = 'round'; c.lineJoin = 'round'; c.beginPath(); c.moveTo(-W * 0.62, H * 0.86); c.lineTo(0, -H * 0.02);
+    c.bezierCurveTo(W * 0.62, -H * 0.62, W * 0.34, -H * 0.9, 0, -H * 0.9); c.bezierCurveTo(-W * 0.34, -H * 0.9, -W * 0.62, -H * 0.62, 0, -H * 0.02); c.lineTo(W * 0.62, H * 0.86); c.stroke(); },
+};
 const SHAPES = {
   circulo: 'Círculo', ovalo: 'Óvalo', ondulado: 'Círculo ondulado', ovalo_ondulado: 'Óvalo ondulado', corazon: 'Corazón', estrella: 'Estrella',
   hexagono: 'Hexágono', octogono: 'Octógono', cuadrado: 'Cuadrado redondeado', rect: 'Rectángulo', capsula: 'Cápsula', arco: 'Arco',
   hueso: 'Hueso', pez: 'Pez', huella: 'Huella', conejo: 'Conejo', zanahoria: 'Zanahoria', flor: 'Flor', nube: 'Nube', escudo: 'Escudo',
   bola: 'Bola de Navidad', arbol: 'Árbol', campana: 'Campana', casa: 'Casita', galleta: 'Muñeco de jengibre', lazo: 'Lazo', copo: 'Copo (silueta)',
-  gota: 'Gota', marcapaginas: 'Marcapáginas',
+  gota: 'Gota', marcapaginas: 'Marcapáginas', lazo_rosa: 'Lazo solidario', esmalte: 'Bote de esmalte',
 };
 function shapePath(c, kind, cx, cy, w, h) {
   c.beginPath();
@@ -279,16 +284,20 @@ function shapePath(c, kind, cx, cy, w, h) {
     case 'copo': { poly(c, regPoly(12, W * 0.55, 0, cx, cy)); for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; const p = []; const ca = Math.cos(a), sa = Math.sin(a); const pr = (u, v) => [cx + u * ca - v * sa, cy + u * sa + v * ca];
         poly(c, [pr(0, -W * 0.09), pr(W, -W * 0.09), pr(W, W * 0.09), pr(0, W * 0.09)]); poly(c, [pr(W * 0.55, 0), pr(W * 0.78, -W * 0.3), pr(W * 0.86, -W * 0.22), pr(W * 0.7, 0)]); poly(c, [pr(W * 0.55, 0), pr(W * 0.78, W * 0.3), pr(W * 0.86, W * 0.22), pr(W * 0.7, 0)]); } break; }
     case 'gota': { c.moveTo(cx, cy - H); c.bezierCurveTo(cx + W * 0.4, cy - H * 0.4, cx + W, cy, cx + W, cy + H * 0.35); c.arc(cx, cy + H * 0.35, W, 0, Math.PI); c.bezierCurveTo(cx - W, cy, cx - W * 0.4, cy - H * 0.4, cx, cy - H); c.closePath(); break; }
+    case 'esmalte': { roundRect(c, cx - W * 0.9, cy - H * 0.05, W * 1.8, h * 0.52, w * 0.12); roundRect(c, cx - W * 0.42, cy - H * 0.22, W * 0.84, h * 0.2, 1); roundRect(c, cx - W * 0.3, cy - H, W * 0.6, h * 0.42, w * 0.08); break; }
     default: ell(c, cx, cy, W, H);
   }
 }
 
 /* ---------- patrones ---------- */
 function rng(seed) { let a = (seed * 2654435761) >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-const PATTERNS = { rayas: 'Rayas', verticales: 'Rayas verticales', diagonales: 'Diagonales', cuadricula: 'Cuadrícula', rombos: 'Rombos', zigzag: 'Zigzag', ondas: 'Ondas', circulos: 'Círculos concéntricos', radial: 'Rayos', puntos: 'Puntos', mosaico: 'Mosaico', floral: 'Floral', panal: 'Panal' };
+const PATTERNS = { rattan: 'Rejilla de rattan', rayas: 'Rayas', verticales: 'Rayas verticales', diagonales: 'Diagonales', cuadricula: 'Cuadrícula', rombos: 'Rombos', zigzag: 'Zigzag', ondas: 'Ondas', circulos: 'Círculos concéntricos', radial: 'Rayos', puntos: 'Puntos', mosaico: 'Mosaico', floral: 'Floral', panal: 'Panal' };
 function patternMask(F, kind, sp, lw, seed) {
   const W = F.W / 2 + sp, H = F.H / 2 + sp;
   if (kind === 'mosaico') return voronoi(F, sp, lw, seed);
+  if (kind === 'rattan') return F.draw(c => { c.fillRect(-W, -H, 2 * W, 2 * H); c.globalCompositeOperation = 'destination-out'; c.beginPath();
+    for (let y = -H; y <= H; y += sp) for (let x = -W; x <= W; x += sp) { const o = regPoly(8, sp * 0.36, Math.PI / 8, x + sp / 2, y + sp / 2); c.moveTo(...o[0]); o.forEach(q => c.lineTo(...q)); c.closePath();
+      const d = sp * 0.11; c.moveTo(x, y - d); c.lineTo(x + d, y); c.lineTo(x, y + d); c.lineTo(x - d, y); c.closePath(); } c.fill(); c.globalCompositeOperation = 'source-over'; });
   return F.draw(c => {
     c.lineWidth = lw;
     const lines = (ang) => { const R = Math.hypot(W, H); const ca = Math.cos(ang), sa = Math.sin(ang); c.beginPath(); for (let d = -R; d <= R; d += sp) { c.moveTo(d * -sa - R * ca, d * ca - R * sa); c.lineTo(d * -sa + R * ca, d * ca + R * sa); } c.stroke(); };
@@ -380,6 +389,7 @@ function maskToMesh(F, m0, z0, z1, mesh = newMesh()) {
     while (s >= 0 && !seen[s] && guard++ < 5e6) { seen[s] = 1; pts.push([(PX[s] + 0.5 - w / 2) / res, -(PY[s] + 0.5 - h / 2) / res]); s = nxt[s]; }
     if (pts.length >= 3) loops.push(pts);
   }
+  if (mesh === 'loops') return loops.map(l => dedup(l.reverse())).filter(l => l.length > 2);
   const eps = 0.3 / res;
   const outers = [], holes = [];
   for (let raw of loops) {
@@ -520,6 +530,7 @@ function mergeMeshes(list) { const o = newMesh(); for (const m of list) { const 
 function signedDist(F, m) { const Do = edt(F, m), Di = edt(F, inv(F, m)); const o = new Float32Array(m.length); for (let i = 0; i < o.length; i++) o[i] = m[i] ? -Math.sqrt(Di[i]) / F.res : Math.sqrt(Do[i]) / F.res; return o; }
 function level(sd, a, b) { const o = new Uint8Array(sd.length); for (let i = 0; i < o.length; i++) o[i] = sd[i] > a && sd[i] <= b ? 1 : 0; return o; }
 
+function traceLoops(F, m, eps) { const loops = maskToMesh(F, m, 0, 0, 'loops'); return loops.map(l => rdpClosed(l, eps ?? 0.3 / F.res)).filter(l => l.length > 2 && Math.abs(area(l)) > 0.02); }
 function meshFromMasks(F, layer) { const m = maskToMesh(F, layer.mask, layer.z0, layer.z1); fixOrientation(m); return m; }
 
 /* ---------- exportación ---------- */
@@ -594,6 +605,6 @@ function demoImage(kind = 'dibujo') {
   return c;
 }
 
-return { tube, threadProfile, shell, maskHeightMesh, translateMesh, mergeMeshes, signedDist, level, MESH_WARN, setQuality, QUALITY, FONTS, font, loadFont, measure, fitSize, frame, or, and, sub, inv, count, edt, dilate, erode, close, open, outline, ring, fillHoles, bbox, extreme, shift, mirrorTo, components,
+return { traceLoops, makeQR, tube, threadProfile, shell, maskHeightMesh, translateMesh, mergeMeshes, signedDist, level, MESH_WARN, setQuality, QUALITY, FONTS, font, loadFont, measure, fitSize, frame, or, and, sub, inv, count, edt, dilate, erode, close, open, outline, ring, fillHoles, bbox, extreme, shift, mirrorTo, components,
   SHAPES, shapePath, PATTERNS, snowflake, wifiIcon, star, regPoly, roundRect, maskToMesh, meshFromMasks, fixOrientation, lathe, heightMesh, newMesh, toSTL, to3MF, demoImage, rng };
 })();
