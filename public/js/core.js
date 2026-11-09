@@ -692,7 +692,7 @@ function demoImage(kind = 'dibujo') {
   return c;
 }
 
-return { IS_DOM, canvas: mkCanvas, setFontSource, useManifold, hasCSG, csgFree, maskSolid, meshSolid, union, subtract, intersect, solidMesh, checkMesh, unionMeshes, renderThumb,
+return { IS_DOM, canvas: mkCanvas, setFontSource, useManifold, hasCSG, csgFree, mf: () => MF, keep, maskSolid, meshSolid, union, subtract, intersect, solidMesh, checkMesh, unionMeshes, renderThumb,
   traceLoops, makeQR, tube, threadProfile, shell, maskHeightMesh, translateMesh, mergeMeshes, signedDist, level, MESH_WARN, setQuality, QUALITY, FONTS, font, loadFont, measure, fitSize, frame, or, and, sub, inv, count, edt, dilate, erode, close, open, outline, ring, fillHoles, bbox, extreme, shift, mirrorTo, components,
   SHAPES, shapePath, PATTERNS, snowflake, wifiIcon, star, regPoly, roundRect, maskToMesh, meshFromMasks, fixOrientation, lathe, heightMesh, newMesh, toSTL, to3MF, demoImage, rng };
 })();
