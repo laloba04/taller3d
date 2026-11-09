@@ -167,14 +167,22 @@ function gRosa(p) {
   layers.push(L('Borde', cl(ring(F, outer, 1.6)), 2.2, 3.2, C.rosa));
   return { F, layers };
 }
+/* abrelatas: bolsillo horizontal abierto por la punta donde entra la anilla de la lata */
+const RANURA = () => [num('grosor', 'Grosor del llavero', 6.4, 4.8, 9, 0.1), num('anchoR', 'Ancho de la ranura', 16, 12, 22, 0.2), num('altoR', 'Alto de la ranura', 2.4, 1.6, 3.6, 0.1), num('fondoR', 'Profundidad de la ranura', 16, 10, 24, 0.5)];
+function abreCapas(base, pocket, p, color, nfcPocket) {
+  const f = 1.6, sh = p.altoR || 2.4; let T = Math.max(p.grosor || 6.4, f + sh + 1.6); const c = color || C.blanco; const out = [L('Base', base, 0, f, c), L('Base (ranura)', sub(base, pocket), f, f + sh, c)];
+  if (nfcPocket) { const e = p.eNfc || 1; T = Math.max(T, f + sh + 0.8 + e + 0.8); const zN = T - 0.8 - e; if (zN > f + sh + 0.01) out.push(L('Base (techo)', base, f + sh, zN, c)); out.push(L('Base (hueco NFC: pausa)', sub(base, nfcPocket), zN, zN + e, c), L('Base (cierre)', base, zN + e, T, c)); }
+  else out.push(L('Base (techo)', base, f + sh, T, c));
+  return { layers: out, T };
+}
+const NOTA_ABRE = 'Mete la anilla de la lata en la ranura de la punta y levanta el llavero para abrirla sin usar las uñas. La ranura se imprime sin soportes (es un puente corto).';
 function gAbrelatas(p) {
-  const L0 = p.largo, Wd = p.anchoP; const F = frame(L0 + 10, Wd + 10);
-  const body = F.draw(c => { c.beginPath(); const x0 = -L0 / 2, x1 = L0 / 2; c.moveTo(x0 + Wd / 2, -Wd / 2); c.lineTo(x1 - 18, -Wd / 2); c.quadraticCurveTo(x1 - 8, -Wd / 2, x1 - 3, -Wd * 0.28); c.quadraticCurveTo(x1, -Wd * 0.18, x1, 0); c.quadraticCurveTo(x1, Wd * 0.18, x1 - 3, Wd * 0.28);
-    c.quadraticCurveTo(x1 - 8, Wd / 2, x1 - 18, Wd / 2); c.lineTo(x0 + Wd / 2, Wd / 2); c.arc(x0 + Wd / 2, 0, Wd / 2, Math.PI / 2, Math.PI * 1.5); c.closePath(); c.fill(); });
-  const slot = F.rect(L0 / 2 - 15, -Wd * 0.13, L0 / 2 - 6, Wd * 0.13, 1.2); const ring0 = F.disk(-L0 / 2 + Wd / 2, 0, 2.6);
-  const S = sub(body, slot, ring0); const thin = F.rect(L0 / 2 - 9, -Wd, L0, Wd);
-  const f = font(p.fuente); const tw = L0 - Wd - 24; const s = fitSize(lines(p.texto, 'Ana'), f, tw, Wd * 0.62); const T = and(F.text(lines(p.texto, 'Ana'), f, s, -L0 / 2 + Wd + tw / 2 - 2, 0), erode(F, sub(S, thin), 1.4));
-  return { F, layers: [L('Cuerpo', S, 0, 1.4, C.rosa), L('Cuerpo (grosor)', sub(S, thin), 1.4, 3.2, C.rosa), L('Texto', T, 3.2, 4, C.blanco)], note: 'La punta fina se mete bajo la anilla de la lata y la ranura hace palanca.' };
+  const L0 = p.largo, aR = p.anchoR, Wd = Math.max(p.anchoP, aR + 4.4); const F = frame(L0 + 10, Wd + 10); const x0 = -L0 / 2, x1 = L0 / 2;
+  const body = F.draw(c => { c.beginPath(); c.moveTo(x0 + Wd / 2, -Wd / 2); c.lineTo(x1 - 3, -Wd / 2); c.quadraticCurveTo(x1, -Wd / 2, x1, -Wd / 2 + 3); c.lineTo(x1, Wd / 2 - 3); c.quadraticCurveTo(x1, Wd / 2, x1 - 3, Wd / 2); c.lineTo(x0 + Wd / 2, Wd / 2); c.arc(x0 + Wd / 2, 0, Wd / 2, Math.PI / 2, Math.PI * 1.5); c.closePath(); c.fill(); });
+  const S = sub(body, F.disk(x0 + Wd / 2, 0, 2.6)); const pocket = F.rect(x1 - p.fondoR, -aR / 2, x1 + 3, aR / 2, 0.8);
+  const ab = abreCapas(S, pocket, p, C.rosa);
+  const f = font(p.fuente); const xa = x0 + Wd + 1, xb = x1 - 2; const tw = xb - xa; const t = lines(p.texto, 'Ana'); const sz = fitSize(t, f, tw, Wd * 0.62); const T = and(F.text(t, f, sz, (xa + xb) / 2, 0), erode(F, S, 1.4));
+  return { F, layers: [...ab.layers, L('Texto', T, ab.T, ab.T + 0.8, C.blanco)], note: NOTA_ABRE };
 }
 /* imagen con bordes altos (resina) */
 function gResina(p) {
@@ -873,18 +881,16 @@ function cabeza(F, p, cy, size) {
   return { sil, capas };
 }
 function gAbrelatas2(p) {
-  const size = p.tam, stemL = 26, stemW = 13; const F = frame(size + 2 * p.borde + 16, size + stemL + 2 * p.borde + 20);
-  const cy = -stemL / 2 - 2; const hd = cabeza(F, p, cy, size); const outline = close(F, dilate(F, hd.sil, p.borde), 2);
-  const eb = extreme(F, outline, 'bottom', -2, 2); const yS0 = eb[1] - 6, yS1 = yS0 + stemL + 6;
-  const stem = F.draw(c => { c.beginPath(); K.roundRect(c, -stemW / 2, yS0, stemW, yS1 - yS0, stemW * 0.35); c.fill(); });
-  const slot = F.rect(-stemW * 0.3, yS1 - 13, stemW * 0.3, yS1 - 4.5, 1.2); let base = sub(or(outline, stem), slot);
-  const h = holeTab(F, base, 'arriba', 4); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
-  const thin = F.rect(-stemW, yS1 - 9, stemW, yS1 + 2); const g = 3; const layers = [];
-  if (p.nfc) { const pocket = F.disk(0, cy, p.dNfc / 2 + 0.3); layers.push(L('Base', base, 0, 0.8, p.color1 || C.blanco), L('Base (hueco NFC: pausa)', sub(base, pocket, thin), 0.8, 0.8 + p.eNfc, p.color1 || C.blanco), L('Base (cierre)', sub(base, thin), 0.8 + p.eNfc, g, p.color1 || C.blanco), L('Punta fina', and(base, thin), 0.8, 1.6, p.color1 || C.blanco)); }
-  else layers.push(L('Base: punta', base, 0, 1.6, p.color1 || C.blanco), L('Base', sub(base, thin), 1.6, g, p.color1 || C.blanco));
-  const first = new Set(['Imagen', 'Pétalos', 'Bote', 'Figura', 'Tapón']); let zb = g; const top = Math.max(...hd.capas.filter(cp => first.has(cp.name)).map(cp => cp.dz), 0);
+  const size = p.tam, aR = p.anchoR || 16, Wb = aR + 4.4, Lb = (p.fondoR || 16) + 6; const F = frame(Math.max(size + 2 * p.borde, Wb) + 16, size + Lb + 2 * p.borde + 20);
+  const cy = -Lb / 2 - 2; const hd = cabeza(F, p, cy, size); const outline = K.fillHoles(F, close(F, dilate(F, hd.sil, p.borde), 2));
+  const eb = extreme(F, outline, 'bottom'); const dir = eb[1] < cy ? -1 : 1; const yB = eb[1] + dir * (p.fondoR || 16); const yA = cy;
+  const block = F.draw(c => { c.beginPath(); K.roundRect(c, -Wb / 2, Math.min(yA, yB), Wb, Math.abs(yB - yA), 2.5); c.fill(); });
+  let base = close(F, or(outline, block), 1.5); const h = holeTab(F, base, 'arriba', 4); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
+  const yP = yB - dir * p.fondoR; const pocket = F.rect(-aR / 2, Math.min(yP, yB + dir * 3), aR / 2, Math.max(yP, yB + dir * 3), 0.8);
+  const ab = abreCapas(base, pocket, p, p.color1 || C.blanco, p.nfc ? F.disk(0, cy, p.dNfc / 2 + 0.3) : null); const g = ab.T; const layers = ab.layers;
+  const first = new Set(['Imagen', 'Pétalos', 'Bote', 'Figura', 'Tapón']); const top = Math.max(...hd.capas.filter(cp => first.has(cp.name)).map(cp => cp.dz), 0);
   for (const cp of hd.capas) { const m = cl(and(cp.mask, erode(F, outline, 0.4))); if (!K.count(m)) continue; if (first.has(cp.name)) layers.push(L(cp.name, m, g, g + cp.dz, cp.color)); else layers.push(L(cp.name, m, g + top, g + top + cp.dz * 0.6, cp.color)); }
-  return { F, layers, note: 'Mete la punta fina bajo la anilla de la lata y haz palanca; la ranura engancha la anilla.' + (p.nfc ? ' Pausa al empezar "Base (cierre)" para meter la etiqueta NFC.' : '') };
+  return { F, layers, note: NOTA_ABRE + (p.nfc ? ' Pausa al empezar "Base (hueco NFC: pausa)" para meter la etiqueta NFC.' : '') };
 }
 /* rattan */
 function rattanPiece(F, M, p) { const fr = ring(F, M, p.marco); const inner = erode(F, M, p.marco - 0.6); const rt = and(F.pattern('rattan', p.paso, 1, 1), inner); return { fr, rt }; }
@@ -1017,7 +1023,7 @@ M('ll-zanahoria', 'Llavero zanahoria con nombre', 'Zanahoria con el nombre en el
 M('ll-espejo', 'Llavero con espejo y texto', 'Aro para un espejito redondo con texto alrededor.', [num('dEspejo', 'Ø del espejo', 50, 25, 80), num('banda', 'Ancho del aro', 9, 6, 14), num('hEspejo', 'Profundidad', 2.4, 1, 5, 0.2), txt('texto', 'Texto superior', 'MAFALDA'), txt('texto2', 'Texto inferior', 'BEST MOM'), fnt('fuente', 'Fuente', 'montserrat'), ...HOLE('der')], p => gEspejo(p));
 M('ll-rosa', 'Llavero flor con texto', 'Medallón ondulado con flor y nombre en arco.', [num('diametro', 'Diámetro', 48, 30, 80), txt('texto', 'Texto', 'mejor mamá'), fnt('fuente', 'Fuente', 'fredoka'), ...HOLE()], p => gRosa(p));
 M('ll-resina', 'Imagen con bordes altos (resina)', 'Contorno y líneas de la imagen en relieve para rellenar con resina.', [img('img', 'Imagen (línea)', 'dibujo'), UMB, num('ancho', 'Tamaño', 50, 25, 120), num('pared', 'Grosor de pared', 1.4, 0.8, 3, 0.2), num('hPared', 'Altura de pared', 2, 1, 5, 0.2), ...HOLE()], p => gResina(p));
-M('ll-abrelatas', 'Abrelatas sencillo', 'Palanca con nombre, sin figura.', [txt('texto', 'Texto', 'Ana'), fnt('fuente', 'Fuente', 'luckiest'), num('largo', 'Largo', 70, 50, 100), num('anchoP', 'Ancho', 22, 16, 32)], p => gAbrelatas(p));
+M('ll-abrelatas', 'Abrelatas sencillo', 'Palanca con nombre, sin figura.', [txt('texto', 'Texto', 'Ana'), fnt('fuente', 'Fuente', 'luckiest'), num('largo', 'Largo', 70, 50, 100), num('anchoP', 'Ancho', 22, 16, 32), ...RANURA()], p => gAbrelatas(p));
 M('chapa-llavero', 'Llavero para chapa', 'Marco a medida para una chapa (botón de alfiler).', CHAPA(false), p => gChapa(p));
 M('chapa-iman', 'Imán de nevera para chapa', 'Marco con el fondo abierto: lo sujeta el imán de la chapa.', CHAPA(true), p => gChapa(p, { iman: true }));
 M('chapa-nav-llavero', 'Llavero navideño para chapa', 'Marco con forma navideña y lazo o acebo.', CHAPA(false, { forma: 'bola', adorno: 'lazo' }), p => gChapa(p));
@@ -1205,7 +1211,7 @@ for (const [id, nm, forma, tam, alto] of [['tb-corazon', 'Corazón termoformado'
 // Abrelatas con cabeza personalizable
 const ABR = (o = {}) => [sel('cabeza', 'Diseño', o.cabeza || 'imagen', { imagen: 'Imagen', texto: 'Texto en placa', flor: 'Flor multicolor', esmalte: 'Bote de esmalte', lazo_rosa: 'Lazo solidario', corazon: 'Corazón', estrella: 'Estrella', circulo: 'Círculo' }),
   img('img', 'Imagen', o.demo || 'logo', { show: p => p.cabeza === 'imagen' }), { ...UMB, show: p => p.cabeza === 'imagen' }, txt('texto', 'Texto / icono', o.texto ?? '', { show: p => p.cabeza !== 'imagen' && p.cabeza !== 'flor' && p.cabeza !== 'lazo_rosa' }), fnt('fuente', 'Fuente', o.fuente || 'righteous', { show: p => p.cabeza !== 'imagen' && p.cabeza !== 'flor' && p.cabeza !== 'lazo_rosa' }),
-  num('tam', 'Tamaño de la figura', o.tam || 34, 20, 60), num('borde', 'Borde', o.borde ?? 2, 0.6, 5, 0.2), chk('nfc', 'Hueco para NFC', !!o.nfc), num('dNfc', 'Ø etiqueta NFC', 20, 12, 30, 1, { show: p => p.nfc }), num('eNfc', 'Grosor hueco NFC', 1, 0.4, 2, 0.1, { show: p => p.nfc })];
+  num('tam', 'Tamaño de la figura', o.tam || 34, 20, 60), num('borde', 'Borde', o.borde ?? 2, 0.6, 5, 0.2), chk('nfc', 'Hueco para NFC', !!o.nfc), num('dNfc', 'Ø etiqueta NFC', 20, 12, 30, 1, { show: p => p.nfc }), num('eNfc', 'Grosor hueco NFC', 1, 0.4, 2, 0.1, { show: p => p.nfc }), ...RANURA()];
 M('abre-gen', 'Generador de abrelatas', 'Llavero abrelatas con cualquier imagen, texto o figura.', ABR(), p => gAbrelatas2(p));
 M('abre-lazo', 'Abrelatas lazo solidario', 'El lazo de octubre rosa.', ABR({ cabeza: 'lazo_rosa', tam: 38 }), p => gAbrelatas2({ ...p, color2: C.rosa }));
 M('abre-rect', 'Abrelatas rectángulo', 'Placa con tu @ o tu nombre.', ABR({ cabeza: 'texto', texto: '@tumarca', tam: 40 }), p => gAbrelatas2(p));
