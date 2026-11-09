@@ -168,9 +168,9 @@ function gRosa(p) {
   return { F, layers };
 }
 /* abrelatas: bolsillo horizontal abierto por la punta donde entra la anilla de la lata */
-const RANURA = () => [num('grosor', 'Grosor del llavero', 6.4, 4.8, 9, 0.1), num('anchoR', 'Ancho de la ranura', 16, 12, 22, 0.2), num('altoR', 'Alto de la ranura', 2.4, 1.6, 3.6, 0.1), num('fondoR', 'Profundidad de la ranura', 16, 10, 24, 0.5)];
+const RANURA = () => [num('grosor', 'Grosor del llavero', 6.4, 4.8, 9, 0.1), num('anchoR', 'Ancho de la ranura', 16, 12, 22, 0.2), num('baseR', 'Altura inicial de la ranura', 0.8, 0.4, 2, 0.1), num('altoR', 'Alto de la ranura', 2.6, 1.6, 3.6, 0.1), num('fondoR', 'Profundidad de la ranura', 16, 10, 24, 0.5), chk('circR', 'Alivio circular en la entrada', true)];
 function abreCapas(base, pocket, p, color, nfcPocket) {
-  const f = 1.6, sh = p.altoR || 2.4; let T = Math.max(p.grosor || 6.4, f + sh + 1.6); const c = color || C.blanco; const out = [L('Base', base, 0, f, c), L('Base (ranura)', sub(base, pocket), f, f + sh, c)];
+  const f = p.baseR || 0.8, sh = p.altoR || 2.6; let T = Math.max(p.grosor || 6.4, f + sh + 1.6); const c = color || C.blanco; const out = [L('Base', base, 0, f, c), L('Base (ranura)', sub(base, pocket), f, f + sh, c)];
   if (nfcPocket) { const e = p.eNfc || 1; T = Math.max(T, f + sh + 0.8 + e + 0.8); const zN = T - 0.8 - e; if (zN > f + sh + 0.01) out.push(L('Base (techo)', base, f + sh, zN, c)); out.push(L('Base (hueco NFC: pausa)', sub(base, nfcPocket), zN, zN + e, c), L('Base (cierre)', base, zN + e, T, c)); }
   else out.push(L('Base (techo)', base, f + sh, T, c));
   return { layers: out, T };
@@ -180,8 +180,8 @@ function gAbrelatas(p) {
   const L0 = p.largo, aR = p.anchoR, Wd = Math.max(p.anchoP, aR + 4.4); const F = frame(L0 + 10, Wd + 10); const x0 = -L0 / 2, x1 = L0 / 2;
   const body = F.draw(c => { c.beginPath(); c.moveTo(x0 + Wd / 2, -Wd / 2); c.lineTo(x1 - 3, -Wd / 2); c.quadraticCurveTo(x1, -Wd / 2, x1, -Wd / 2 + 3); c.lineTo(x1, Wd / 2 - 3); c.quadraticCurveTo(x1, Wd / 2, x1 - 3, Wd / 2); c.lineTo(x0 + Wd / 2, Wd / 2); c.arc(x0 + Wd / 2, 0, Wd / 2, Math.PI / 2, Math.PI * 1.5); c.closePath(); c.fill(); });
   const S = sub(body, F.disk(x0 + Wd / 2, 0, 2.6)); const pocket = F.rect(x1 - p.fondoR, -aR / 2, x1 + 3, aR / 2, 0.8);
-  const ab = abreCapas(S, pocket, p, C.rosa);
-  const f = font(p.fuente); const xa = x0 + Wd + 1, xb = x1 - 2; const tw = xb - xa; const t = lines(p.texto, 'Ana'); const sz = fitSize(t, f, tw, Wd * 0.62); const T = and(F.text(t, f, sz, (xa + xb) / 2, 0), erode(F, S, 1.4));
+  const S2 = p.circR ? sub(S, F.disk(x1, 0, aR * 0.28)) : S; const ab = abreCapas(S2, pocket, p, C.rosa);
+  const f = font(p.fuente); const xa = x0 + Wd + 1, xb = x1 - 2; const tw = xb - xa; const t = lines(p.texto, 'Ana'); const sz = fitSize(t, f, tw, Wd * 0.62); const T = and(F.text(t, f, sz, (xa + xb) / 2, 0), erode(F, S2, 1.4));
   return { F, layers: [...ab.layers, L('Texto', T, ab.T, ab.T + 0.8, C.blanco)], note: NOTA_ABRE };
 }
 /* imagen con bordes altos (resina) */
@@ -886,7 +886,7 @@ function gAbrelatas2(p) {
   const eb = extreme(F, outline, 'bottom'); const dir = eb[1] < cy ? -1 : 1; const yB = eb[1] + dir * (p.fondoR || 16); const yA = cy;
   const block = F.draw(c => { c.beginPath(); K.roundRect(c, -Wb / 2, Math.min(yA, yB), Wb, Math.abs(yB - yA), 2.5); c.fill(); });
   let base = close(F, or(outline, block), 1.5); const h = holeTab(F, base, 'arriba', 4); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
-  const yP = yB - dir * p.fondoR; const pocket = F.rect(-aR / 2, Math.min(yP, yB + dir * 3), aR / 2, Math.max(yP, yB + dir * 3), 0.8);
+  if (p.circR) base = sub(base, F.disk(0, yB, aR * 0.28)); const yP = yB - dir * p.fondoR; const pocket = F.rect(-aR / 2, Math.min(yP, yB + dir * 3), aR / 2, Math.max(yP, yB + dir * 3), 0.8);
   const ab = abreCapas(base, pocket, p, p.color1 || C.blanco, p.nfc ? F.disk(0, cy, p.dNfc / 2 + 0.3) : null); const g = ab.T; const layers = ab.layers;
   const first = new Set(['Imagen', 'Pétalos', 'Bote', 'Figura', 'Tapón']); const top = Math.max(...hd.capas.filter(cp => first.has(cp.name)).map(cp => cp.dz), 0);
   for (const cp of hd.capas) { const m = cl(and(cp.mask, erode(F, outline, 0.4))); if (!K.count(m)) continue; if (first.has(cp.name)) layers.push(L(cp.name, m, g, g + cp.dz, cp.color)); else layers.push(L(cp.name, m, g + top, g + top + cp.dz * 0.6, cp.color)); }
