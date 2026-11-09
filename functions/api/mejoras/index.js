@@ -1,6 +1,6 @@
 /* POST /api/mejoras  → enviar un reporte (público, con filtro anti-spam)
    GET  /api/mejoras  → listar reportes (solo administradora) */
-import { LIM, ESTADOS, json, guard, ipHash, corta, avisar } from '../../../lib/mejoras.js';
+import { LIM, TIPOS, ESTADOS, json, guard, ipHash, corta, avisar } from '../../../lib/mejoras.js';
 
 export async function onRequestPost({ request, env, waitUntil }) {
   if (!env.DB) return json({ error: 'La base de datos no está enlazada.' }, 503);
@@ -11,8 +11,8 @@ export async function onRequestPost({ request, env, waitUntil }) {
   const files = fd.getAll('archivos').filter(f => f && typeof f === 'object' && f.size > 0);
   if (files.length > LIM.archivos) return json({ error: `Como mucho ${LIM.archivos} archivos.` }, 400);
   for (const f of files) {
-    const img = f.type.startsWith('image/'), vid = f.type.startsWith('video/');
-    if (!img && !vid) return json({ error: `"${f.name}" no es una foto ni un vídeo.` }, 400);
+    const vid = TIPOS[f.type] === 'video';
+    if (!TIPOS[f.type]) return json({ error: `"${f.name}" no es una foto (JPG, PNG, WebP o GIF) ni un vídeo (MP4, WebM o MOV).` }, 400);
     if (vid && !env.MEDIA) return json({ error: 'Los vídeos todavía no están activados. Manda fotos o descríbelo con texto.' }, 400);
     const max = vid ? LIM.video : env.MEDIA ? LIM.imgR2 : LIM.imgD1;
     if (f.size > max) return json({ error: `"${f.name}" es demasiado grande (máximo ${(max / 1e6).toLocaleString("es-ES")} MB).` }, 413);
@@ -26,7 +26,7 @@ export async function onRequestPost({ request, env, waitUntil }) {
     .bind(rep.modelo, rep.nombre, rep.contacto, texto, ih).run();
   const id = r.meta.last_row_id; rep.id = id; rep.modeloNombre = corta(fd.get('modeloNombre')) || rep.modelo;
   for (const f of files) {
-    const tipo = f.type.startsWith('video/') ? 'video' : 'imagen';
+    const tipo = TIPOS[f.type];
     if (env.MEDIA) {
       const key = `r${id}/${crypto.randomUUID()}`;
       await env.MEDIA.put(key, f.stream(), { httpMetadata: { contentType: f.type } });

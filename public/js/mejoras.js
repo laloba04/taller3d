@@ -39,7 +39,7 @@ async function abrir(modeloId) {
   for (const cat of CAT.CATEGORIES) { const g = el('optgroup', { label: cat.name }); for (const id of cat.models) { const m = CAT.MODELS[id]; if (m && !m.soon) g.append(el('option', { value: id }, m.name)); } if (g.children.length) modelo.append(g); }
   if (modeloId && CAT.MODELS[modeloId]) modelo.value = modeloId;
   const texto = el('textarea', { rows: 6, maxlength: 4000, placeholder: 'Qué pasa, en qué modelo y con qué valores. Por ejemplo: "El abrelatas lazo: la anilla de la lata no entra en la ranura, la he impreso en PLA a 0,2 mm".' });
-  const files = el('input', { type: 'file', multiple: '', accept: c.videos ? 'image/*,video/*' : 'image/*' });
+  const files = el('input', { type: 'file', multiple: '', accept: c.videos ? 'image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime' : 'image/jpeg,image/png,image/webp,image/gif' });
   const lista = el('div', { class: 'mej-files' }); let elegidos = [];
   const pintar = () => { lista.innerHTML = ''; elegidos.forEach((fl, i) => { const q = el('button', { type: 'button', class: 'chip', title: 'Quitar', onclick: () => { elegidos.splice(i, 1); pintar(); } }, (fl.type.startsWith('video/') ? '🎬 ' : '📷 ') + fl.name + ' · ' + mb(fl.size) + ' ✕'); lista.append(q); }); };
   files.addEventListener('change', () => { elegidos = elegidos.concat([...files.files]).slice(0, c.maxArchivos || 5); files.value = ''; pintar(); });
