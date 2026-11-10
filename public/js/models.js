@@ -761,14 +761,16 @@ function gTermo(p) {
       for (const q of pts) pins = or(pins, G.disk(q[0], q[1], 0.85)); }
     /* boca de la boquilla: paso abierto en el borde para meter las chuches */
     let boca = G.blank(); const nx = cuelloXY[0], ny = extreme(G, flat, 'top', cuelloXY[0] - 1, cuelloXY[0] + 1)[1];
-    if (rosca) boca = G.rect(nx - ROSCA.rb, ny - 2, nx + ROSCA.rb, ny + p.bordeMalla + 1.5, 0.5);
-    parts.push(LM('Malla delantera', mm(G, sub(body, boca), 0, p.eMalla, dxF, dy), p.colorMalla || C.rojo));
+    /* base maciza alrededor del pie de la boquilla (la boquilla se mete 3 mm en ella) y paso abierto para las chuches */
+    let base = G.blank(); const fondoBase = Math.max(5.5, p.bordeMalla + 3);
+    if (rosca) { base = G.rect(nx - ROSCA.R - 1.5, ny - 0.5, nx + ROSCA.R + 1.5, ny + fondoBase, 1.5); boca = G.rect(nx - ROSCA.rb, ny - 2, nx + ROSCA.rb, ny + fondoBase + 1, 0.5); }
+    parts.push(LM('Malla delantera', mm(G, sub(or(body, base), boca), 0, p.eMalla, dxF, dy), p.colorMalla || C.rojo));
     if (K.count(D2)) parts.push(LM('Malla delantera: diseño', mm(G, sub(dsg, solid), 0, p.eMalla, dxF, dy), C.blanco));
     if (two2) { if (K.count(pins)) parts.push(LM('Pivotes de cierre', mm(G, pins, p.eMalla, p.eMalla + 2, dxF, dy), p.colorMalla || C.rojo));
-      const back = sub(K.mirrorTo(G, sub(or(and(lat, flat), solid), boca), 0, 0), K.mirrorTo(G, dilate(G, pins, 0.2), 0, 0));
+      const back = sub(K.mirrorTo(G, sub(or(and(lat, flat), solid, base), boca), 0, 0), K.mirrorTo(G, dilate(G, pins, 0.2), 0, 0));
       parts.push(LM('Malla trasera (en espejo)', mm(G, back, 0, p.eMalla, dxB, dy), p.colorMalla || C.rojo)); }
     if (rosca) {
-      const cr = cierreRosca(p.eMalla, p.holgRosca ?? 0.35); const y0 = -ny - 1;   /* coordenadas de malla: y hacia arriba */
+      const cr = cierreRosca(p.eMalla, p.holgRosca ?? 0.35); const y0 = -ny - 3;   /* coordenadas de malla: y hacia arriba; 3 mm metida en la base */
       parts.push(LM('Boquilla (mitad delantera)', K.solidMesh(K.keep(cr.delantera.translate([nx + dxF, y0 + dy, 0]))), p.colorMalla || C.rojo));
       parts.push(LM('Boquilla (mitad trasera)', K.solidMesh(K.keep(cr.trasera.translate([-nx + dxB, y0 + dy, 0]))), p.colorMalla || C.rojo));
       const yc = dy - G.H / 2 - 14;
