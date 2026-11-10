@@ -117,3 +117,4 @@ button{font:inherit;cursor:pointer}
 .mej-ojo{position:absolute;right:4px;top:50%;transform:translateY(-50%);border:none;background:none;font-size:17px;cursor:pointer;padding:4px 8px;line-height:1}
 .mej-tg{background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 12px;margin:-4px 0 14px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .chip.peligro{background:#c0392b;border-color:#c0392b;color:#fff}.mej-seguro{font-size:12.5px;font-weight:600;color:#c0392b}
+.stage-bar .ghost.on{background:var(--acc);color:#fff;border-color:var(--acc)}

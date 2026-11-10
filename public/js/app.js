@@ -5,7 +5,7 @@ const { MODELS, CATEGORIES } = CAT;
 const $ = s => document.querySelector(s);
 const el = (tag, attrs = {}, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs)) { if (k === 'class') e.className = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v); } for (const c of kids) e.append(c); return e; };
 const demoCache = {}; const demo = k => demoCache[k] || (demoCache[k] = K.demoImage(k));
-const state = { values: {}, colors: {}, cat: null, model: null, result: null, gen: 0 };
+const state = { values: {}, colors: {}, offsets: {}, cat: null, model: null, result: null, gen: 0 };
 
 /* ---------- motor: Web Worker (segundo plano) o, si no se puede, la propia página ---------- */
 const Engine = (() => {
@@ -209,7 +209,7 @@ async function download() {
     const v = vals(m); const tag = String(v.texto || v.nombre || v.usuario || v.letra || '').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').slice(0, 24);
     const base = m.id + (tag ? '-' + tag : '');
     const readme = `${m.name}\nGenerado con Taller 3D.\n\n${base}.3mf: cada capa es una pieza con su color (asígnale filamento en el laminador).\n${base}.stl: {STL}\n\nPiezas:\n` + r.parts.map(p => `- ${p.name}${p.z1 !== undefined ? ` (z ${p.z0}–${p.z1} mm)` : ''}`).join('\n') + '\n';
-    const { blob } = await Engine.zip({ parts: r.parts.map(p => ({ name: p.name, color: p.color, mesh: p.mesh })), title: m.name, base, readme });
+    const { blob } = await Engine.zip({ parts: partsColocadas(r.parts).map(p => ({ name: p.name, color: p.color, mesh: p.mesh })), title: m.name, base, readme });
     $('#dl-msg').textContent = await saveFile(base + '.zip', blob);
   } catch (e) { console.error(e); $('#dl-msg').textContent = 'Error al crear los archivos: ' + (e.message || e); }
   btn.disabled = false;
@@ -227,6 +227,49 @@ function initViewer() {
   controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
   new ResizeObserver(resize).observe(box); resize();
   $('#btn-top').onclick = () => fit(true); $('#btn-iso').onclick = () => fit(false);
+  $('#btn-mover').onclick = () => setMover(!mover);
+  $('#btn-recolocar').onclick = () => { const k = state.model && state.model.id; if (k) delete state.offsets[k]; aplicarOffsets(); };
+  const cv = renderer.domElement;
+  cv.addEventListener('pointerdown', arrastreIni); cv.addEventListener('pointermove', arrastreMov); cv.addEventListener('pointerup', arrastreFin); cv.addEventListener('pointercancel', arrastreFin);
+}
+/* ---------- mover piezas sobre la placa ----------
+   Las partes cuyas huellas se tocan forman una pieza (p. ej. una malla y su diseño) y se mueven juntas.
+   El desplazamiento se guarda por modelo y se aplica al descargar. */
+let mover = false, grupos = [], arr = null; const ray = new THREE.Raycaster(), plano = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+function setMover(on) { mover = on; $('#btn-mover').classList.toggle('on', on); controls.enableRotate = !on; renderer.domElement.style.cursor = on ? 'grab' : ''; }
+function agrupar(parts) {
+  const bb = parts.map(p => { const P = p.mesh.pos; let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (let i = 0; i < P.length; i += 3) { if (P[i] < x0) x0 = P[i]; if (P[i] > x1) x1 = P[i]; if (P[i + 1] < y0) y0 = P[i + 1]; if (P[i + 1] > y1) y1 = P[i + 1]; } return [x0, y0, x1, y1]; });
+  const pad = parts.map((_, i) => i); const raiz = i => pad[i] === i ? i : (pad[i] = raiz(pad[i]));
+  for (let i = 0; i < bb.length; i++) for (let j = i + 1; j < bb.length; j++) { const a = bb[i], b = bb[j]; if (a[0] <= b[2] + 0.5 && b[0] <= a[2] + 0.5 && a[1] <= b[3] + 0.5 && b[1] <= a[3] + 0.5) pad[raiz(i)] = raiz(j); }
+  const m = new Map(); parts.forEach((_, i) => { const r = raiz(i); if (!m.has(r)) m.set(r, []); m.get(r).push(i); }); return [...m.values()];
+}
+const offs = () => { const k = state.model && state.model.id; if (!k) return []; const o = state.offsets[k]; return o && o.n === grupos.length ? o.v : []; };
+function aplicarOffsets() {
+  const v = offs(); grupos.forEach((g, gi) => { const d = v[gi] || [0, 0]; for (const i of g) if (meshes[i]) { meshes[i].position.x = d[0]; meshes[i].position.y = d[1]; } });
+  $('#btn-recolocar').classList.toggle('hidden', !v.some(d => d && (d[0] || d[1]))); actualizaDims();
+}
+function puntoPlaca(e) { const r = renderer.domElement.getBoundingClientRect(); ray.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1 }, camera); return ray.ray.intersectPlane(plano, new THREE.Vector3()); }
+function arrastreIni(e) {
+  if (!mover || e.button !== 0) return; const r = renderer.domElement.getBoundingClientRect();
+  ray.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1 }, camera);
+  const hit = ray.intersectObjects(meshes)[0]; if (!hit) return; const mi = meshes.indexOf(hit.object); const gi = grupos.findIndex(g => g.includes(mi)); const p = puntoPlaca(e); if (gi < 0 || !p) return;
+  const k = state.model.id; if (!state.offsets[k] || state.offsets[k].n !== grupos.length) state.offsets[k] = { n: grupos.length, v: grupos.map(() => [0, 0]) };
+  const d = state.offsets[k].v[gi]; arr = { gi, p0: p, d0: [d[0], d[1]], id: e.pointerId }; controls.enabled = false; renderer.domElement.setPointerCapture(e.pointerId); renderer.domElement.style.cursor = 'grabbing';
+}
+function arrastreMov(e) {
+  if (!arr) return; const p = puntoPlaca(e); if (!p) return; const d = state.offsets[state.model.id].v[arr.gi];
+  d[0] = Math.round((arr.d0[0] + p.x - arr.p0.x) * 10) / 10; d[1] = Math.round((arr.d0[1] + p.y - arr.p0.y) * 10) / 10;
+  for (const i of grupos[arr.gi]) { meshes[i].position.x = d[0]; meshes[i].position.y = d[1]; }
+}
+function arrastreFin() { if (!arr) return; try { renderer.domElement.releasePointerCapture(arr.id); } catch (er) { } arr = null; controls.enabled = true; renderer.domElement.style.cursor = mover ? 'grab' : ''; aplicarOffsets(); }
+/* piezas con el desplazamiento aplicado (para descargar) */
+function partsColocadas(parts) {
+  const v = offs(); const de = new Array(parts.length).fill(null); grupos.forEach((g, gi) => { const d = v[gi]; if (d && (d[0] || d[1])) for (const i of g) de[i] = d; });
+  return parts.map((p, i) => { const d = de[i]; if (!d) return p; const P = Float32Array.from(p.mesh.pos); for (let j = 0; j < P.length; j += 3) { P[j] += d[0]; P[j + 1] += d[1]; } return { ...p, mesh: { pos: P, idx: p.mesh.idx } }; });
+}
+function actualizaDims() {
+  if (!group) return; const bb = new THREE.Box3().setFromObject(group); const s = bb.getSize(new THREE.Vector3()); const r = state.result;
+  $('#dims').textContent = isFinite(s.x) && r ? `${s.x.toFixed(1)} × ${s.y.toFixed(1)} × ${s.z.toFixed(1)} mm · ${r.parts.reduce((a, p) => a + p.mesh.idx.length / 3, 0).toLocaleString('es-ES')} triángulos` : '—';
 }
 function resize() { if (!renderer) return; const b = $('#viewer'); const w = b.clientWidth, h = b.clientHeight || 1; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 function loop() { raf = requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); }
@@ -235,8 +278,7 @@ function showMeshes(parts) {
   for (const m of meshes) { group.remove(m); m.geometry.dispose(); m.material.dispose(); } meshes = [];
   for (const p of parts) { const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(p.mesh.pos instanceof Float32Array ? p.mesh.pos : Float32Array.from(p.mesh.pos), 3)); g.setIndex(new THREE.BufferAttribute(p.mesh.idx instanceof Uint32Array ? p.mesh.idx : Uint32Array.from(p.mesh.idx), 1)); const ng = g.toNonIndexed(); g.dispose(); ng.computeVertexNormals();
     const mat = new THREE.MeshStandardMaterial({ color: p.color, roughness: 0.62, metalness: 0.02, flatShading: false }); const mesh = new THREE.Mesh(ng, mat); group.add(mesh); meshes.push(mesh); }
-  const bb = new THREE.Box3().setFromObject(group); const s = bb.getSize(new THREE.Vector3());
-  $('#dims').textContent = isFinite(s.x) ? `${s.x.toFixed(1)} × ${s.y.toFixed(1)} × ${s.z.toFixed(1)} mm · ${parts.reduce((a, p) => a + p.mesh.idx.length / 3, 0).toLocaleString('es-ES')} triángulos` : '—';
+  grupos = agrupar(parts); aplicarOffsets();
   if (state.refit) { fit(false); state.refit = false; }
 }
 function fit(top) {
