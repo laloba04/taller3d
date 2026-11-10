@@ -5,6 +5,7 @@ const Mejoras = (() => {
 /* utilidades de la interfaz (las expone app.js) */
 const el = (...a) => window.T3DUI.el(...a), page = (...a) => window.T3DUI.page(...a), crumbs = (...a) => window.T3DUI.crumbs(...a);
 const API = '/api/mejoras';
+const SEGUROS = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'video/mp4', 'video/webm', 'video/quicktime']);
 const ESTADOS = { pendiente: 'Pendiente', en_curso: 'En curso', arreglado: 'Arreglado', descartado: 'Descartado' };
 let cfg = null;
 async function config() {
@@ -131,7 +132,10 @@ function tarjeta(r, filtro) {
   const media = el('div', { class: 'mej-media' });
   for (const a of r.adjuntos) {
     const ph = el('div', { class: 'mej-ph' }, a.tipo === 'video' ? '🎬' : '📷'); media.append(ph);
-    api('/adjunto/' + a.id).then(x => x.blob()).then(b => { const u = URL.createObjectURL(b);
+    api('/adjunto/' + a.id).then(x => x.blob()).then(b => {
+      /* segunda barrera: solo se muestran fotos y vídeos de la lista; cualquier otra cosa no se abre */
+      if (!SEGUROS.has(b.type)) { ph.textContent = '⚠️'; ph.title = 'Archivo no permitido'; return; }
+      const u = URL.createObjectURL(new Blob([b], { type: b.type }));
       ph.replaceWith(a.tipo === 'video' ? el('video', { src: u, controls: '', preload: 'metadata' }) : el('a', { href: u, target: '_blank' }, el('img', { src: u, alt: a.nombre || 'foto' }))); })
       .catch(() => { ph.textContent = '⚠️'; });
   }
