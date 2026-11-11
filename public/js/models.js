@@ -764,18 +764,24 @@ function gTermo(p) {
     /* base maciza alrededor del pie de la boquilla (la boquilla se mete 3 mm en ella) y paso abierto para las chuches */
     let base = G.blank(); const fondoBase = Math.max(5.5, p.bordeMalla + 3);
     if (rosca) { base = G.rect(nx - ROSCA.R - 1.5, ny - 0.5, nx + ROSCA.R + 1.5, ny + fondoBase, 1.5); boca = G.rect(nx - ROSCA.rb, ny - 2, nx + ROSCA.rb, ny + fondoBase + 1, 0.5); }
-    parts.push(LM('Malla delantera', mm(G, sub(or(body, base), boca), 0, p.eMalla, dxF, dy), p.colorMalla || C.rojo));
+    /* boquilla de rosca: cada mitad se funde con su malla para que salgan en una sola pieza (no se separan al imprimir ni al mover) */
+    let bq = null;
+    if (rosca) {
+      const cr = cierreRosca(p.eMalla, p.holgRosca ?? 0.35); const y0 = -ny - 3;   /* coordenadas de malla: y hacia arriba; 3 mm metida en la base */
+      const yc = dy - G.H / 2 - 14;
+      bq = { del: K.solidMesh(K.keep(cr.delantera.translate([nx + dxF, y0 + dy, 0]))), tras: K.solidMesh(K.keep(cr.trasera.translate([-nx + dxB, y0 + dy, 0]))),
+        tapon: K.solidMesh(K.keep(cr.tapon.translate([-12, yc, 0]))), pinzas: K.solidMesh(K.union([K.keep(cr.pinza.translate([4, yc - 5, 0])), K.keep(cr.pinza.translate([18, yc - 5, 0]))])) };
+    }
+    const conBoquilla = (nombre, malla, b) => { const u = b && K.unionMeshes([malla, b]); if (u) return [LM(nombre + ' (con boquilla)', u, p.colorMalla || C.rojo)];
+      return b ? [LM(nombre, malla, p.colorMalla || C.rojo), LM('Boquilla de ' + nombre.toLowerCase(), b, p.colorMalla || C.rojo)] : [LM(nombre, malla, p.colorMalla || C.rojo)]; };
+    parts.push(...conBoquilla('Malla delantera', mm(G, sub(or(body, base), boca), 0, p.eMalla, dxF, dy), bq && bq.del));
     if (K.count(D2)) parts.push(LM('Malla delantera: diseño', mm(G, sub(dsg, solid), 0, p.eMalla, dxF, dy), C.blanco));
     if (two2) { if (K.count(pins)) parts.push(LM('Pivotes de cierre', mm(G, pins, p.eMalla, p.eMalla + 2, dxF, dy), p.colorMalla || C.rojo));
       const back = sub(K.mirrorTo(G, sub(or(and(lat, flat), solid, base), boca), 0, 0), K.mirrorTo(G, dilate(G, pins, 0.2), 0, 0));
-      parts.push(LM('Malla trasera (en espejo)', mm(G, back, 0, p.eMalla, dxB, dy), p.colorMalla || C.rojo)); }
-    if (rosca) {
-      const cr = cierreRosca(p.eMalla, p.holgRosca ?? 0.35); const y0 = -ny - 3;   /* coordenadas de malla: y hacia arriba; 3 mm metida en la base */
-      parts.push(LM('Boquilla (mitad delantera)', K.solidMesh(K.keep(cr.delantera.translate([nx + dxF, y0 + dy, 0]))), p.colorMalla || C.rojo));
-      parts.push(LM('Boquilla (mitad trasera)', K.solidMesh(K.keep(cr.trasera.translate([-nx + dxB, y0 + dy, 0]))), p.colorMalla || C.rojo));
-      const yc = dy - G.H / 2 - 14;
-      parts.push(LM('Tapón de rosca', K.solidMesh(K.keep(cr.tapon.translate([-12, yc, 0]))), C.blanco));
-      parts.push(LM('Pinzas', K.solidMesh(K.union([K.keep(cr.pinza.translate([4, yc - 5, 0])), K.keep(cr.pinza.translate([18, yc - 5, 0]))])), C.blanco));
+      parts.push(...conBoquilla('Malla trasera (en espejo)', mm(G, back, 0, p.eMalla, dxB, dy), bq && bq.tras)); }
+    if (bq) {
+      parts.push(LM('Tapón de rosca', bq.tapon, C.blanco));
+      parts.push(LM('Pinzas', bq.pinzas, C.blanco));
     }
   }
   return { layers: parts, note: (p.malla ? 'Imprime las mallas en plano. Calienta cada una (pistola de calor o agua muy caliente) y presiónala entre el macho y la hembra; la trasera sale en espejo, así que se pone en el molde dada la vuelta. ' + (rosca ? 'Junta las dos mallas por el borde: las medias boquillas forman una boquilla con rosca; mete las chuches por ella, enrosca el tapón (su aro sirve para colgarlo con una cinta) y sujeta los bordes con las pinzas. Imprime tapón y pinzas a 0,16 mm. ' : p.malla && p.trasera !== 'no' && p.cierre !== 'no' ? 'Después une las dos por el borde encajando los pivotes. ' : '') : '') + 'Calienta la lámina (EVA o goma) y présala entre el macho y la hembra dada la vuelta. El grosor de lámina ajusta la holgura.' + (p.guias ? ' Recorta la lámina para que no tape los cuatro pivotes de las esquinas.' : '') };
