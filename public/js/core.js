@@ -636,6 +636,13 @@ function toSTL(meshes) {
   return buf;
 }
 const xesc = s => String(s).replace(/[<>&"]/g, ch => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[ch]));
+/* agrupa las partes cuyas huellas (caja en planta) se tocan: forman una misma pieza física */
+function agrupar(parts) {
+  const bb = parts.map(p => { const P = p.mesh.pos; let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (let i = 0; i < P.length; i += 3) { if (P[i] < x0) x0 = P[i]; if (P[i] > x1) x1 = P[i]; if (P[i + 1] < y0) y0 = P[i + 1]; if (P[i + 1] > y1) y1 = P[i + 1]; } return [x0, y0, x1, y1]; });
+  const pad = parts.map((_, i) => i); const raiz = i => pad[i] === i ? i : (pad[i] = raiz(pad[i]));
+  for (let i = 0; i < bb.length; i++) for (let j = i + 1; j < bb.length; j++) { const a = bb[i], b = bb[j]; if (a[0] <= b[2] + 0.5 && b[0] <= a[2] + 0.5 && a[1] <= b[3] + 0.5 && b[1] <= a[3] + 0.5) pad[raiz(i)] = raiz(j); }
+  const m = new Map(); parts.forEach((_, i) => { const r = raiz(i); if (!m.has(r)) m.set(r, []); m.get(r).push(i); }); return [...m.values()];
+}
 async function to3MF(parts, title) {
   const out = [];
   out.push('<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="es-ES" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">\n');
@@ -649,10 +656,14 @@ async function to3MF(parts, title) {
     const I = p.mesh.idx; const ts = []; for (let t = 0; t < I.length; t += 3) ts.push(`<triangle v1="${I[t]}" v2="${I[t + 1]}" v3="${I[t + 2]}"/>`);
     out.push(ts.join('\n')); out.push('\n</triangles></mesh></object>\n');
   });
-  const pid = parts.length + 2;
-  out.push(`<object id="${pid}" type="model" name="${xesc(title)}"><components>\n`);
-  parts.forEach((p, k) => out.push(`<component objectid="${k + 2}"/>\n`));
-  out.push(`</components></object>\n</resources>\n<build><item objectid="${pid}"/></build>\n</model>\n`);
+  /* un objeto por pieza física (partes que se tocan, p. ej. la malla y su diseño): en el laminador se mueven juntas,
+     y los moldes, tapón, etc. quedan como objetos aparte */
+  const gs = agrupar(parts); let oid = parts.length + 2; const items = [];
+  gs.forEach(g => { const big = g.reduce((a, i) => parts[i].mesh.idx.length > parts[a].mesh.idx.length ? i : a, g[0]);
+    out.push(`<object id="${oid}" type="model" name="${xesc(parts[big].name)}"><components>\n`);
+    g.forEach(k => out.push(`<component objectid="${k + 2}"/>\n`));
+    out.push('</components></object>\n'); items.push(`<item objectid="${oid}"/>`); oid++; });
+  out.push(`</resources>\n<build>${items.join('')}</build>\n</model>\n`);
   const z = new JSZip();
   z.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>');
   z.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>', { createFolders: false });
@@ -694,5 +705,5 @@ function demoImage(kind = 'dibujo') {
 
 return { IS_DOM, canvas: mkCanvas, setFontSource, useManifold, hasCSG, csgFree, mf: () => MF, keep, maskSolid, meshSolid, union, subtract, intersect, solidMesh, checkMesh, unionMeshes, renderThumb,
   traceLoops, makeQR, tube, threadProfile, shell, maskHeightMesh, translateMesh, mergeMeshes, signedDist, level, MESH_WARN, setQuality, QUALITY, FONTS, font, loadFont, measure, fitSize, frame, or, and, sub, inv, count, edt, dilate, erode, close, open, outline, ring, fillHoles, bbox, extreme, shift, mirrorTo, components,
-  SHAPES, shapePath, PATTERNS, snowflake, wifiIcon, star, regPoly, roundRect, maskToMesh, meshFromMasks, fixOrientation, lathe, heightMesh, newMesh, toSTL, to3MF, demoImage, rng };
+  SHAPES, shapePath, PATTERNS, snowflake, wifiIcon, star, regPoly, roundRect, maskToMesh, meshFromMasks, fixOrientation, lathe, heightMesh, newMesh, toSTL, to3MF, agrupar, demoImage, rng };
 })();

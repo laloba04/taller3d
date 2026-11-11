@@ -237,12 +237,7 @@ function initViewer() {
    El desplazamiento se guarda por modelo y se aplica al descargar. */
 let mover = false, grupos = [], arr = null; const ray = new THREE.Raycaster(), plano = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 function setMover(on) { mover = on; $('#btn-mover').classList.toggle('on', on); controls.enableRotate = !on; renderer.domElement.style.cursor = on ? 'grab' : ''; }
-function agrupar(parts) {
-  const bb = parts.map(p => { const P = p.mesh.pos; let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (let i = 0; i < P.length; i += 3) { if (P[i] < x0) x0 = P[i]; if (P[i] > x1) x1 = P[i]; if (P[i + 1] < y0) y0 = P[i + 1]; if (P[i + 1] > y1) y1 = P[i + 1]; } return [x0, y0, x1, y1]; });
-  const pad = parts.map((_, i) => i); const raiz = i => pad[i] === i ? i : (pad[i] = raiz(pad[i]));
-  for (let i = 0; i < bb.length; i++) for (let j = i + 1; j < bb.length; j++) { const a = bb[i], b = bb[j]; if (a[0] <= b[2] + 0.5 && b[0] <= a[2] + 0.5 && a[1] <= b[3] + 0.5 && b[1] <= a[3] + 0.5) pad[raiz(i)] = raiz(j); }
-  const m = new Map(); parts.forEach((_, i) => { const r = raiz(i); if (!m.has(r)) m.set(r, []); m.get(r).push(i); }); return [...m.values()];
-}
+const agrupar = parts => K.agrupar(parts);
 const offs = () => { const k = state.model && state.model.id; if (!k) return []; const o = state.offsets[k]; return o && o.n === grupos.length ? o.v : []; };
 function aplicarOffsets() {
   const v = offs(); grupos.forEach((g, gi) => { const d = v[gi] || [0, 0]; for (const i of g) if (meshes[i]) { meshes[i].position.x = d[0]; meshes[i].position.y = d[1]; } });
