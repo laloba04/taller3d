@@ -805,8 +805,9 @@ function gTermo(p) {
     for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const src = j * w + (w - 1 - i); const depth = St[src] ? Math.max(0, ht[src] + sign * et[src]) : 0; fem[j * w + i] = Math.max(1.2, Hb - depth); }
     if (pins) { const ph = dilate(F, pins, 0.35); for (let i = 0; i < n; i++) if (ph[i]) fem[i] = Math.max(1.2, Hb - pinH - 0.6); }
     /* canal en la hembra para que no aplaste la boquilla al prensar la malla (en espejo, como la hembra) */
-    if (rosca) { const c = F.rect(-cuelloXY[0] - ROSCA.R - 1, cuelloXY[1] - ROSCA.L - 30, -cuelloXY[0] + ROSCA.R + 1, cuelloXY[1] + 3, 1);
-      for (let i = 0; i < n; i++) if (c[i]) fem[i] = Math.max(1.2, Math.min(fem[i], Hb - ROSCA.R - 1)); }
+    if (rosca) { /* más ancho que la base maciza de la boquilla (R + 1,5 por lado) con holgura, y más hondo, para que entre sin forzar */
+      const hc = ROSCA.R + 1.5 + (p.holgCanal ?? 1.5); const c = F.rect(-cuelloXY[0] - hc, cuelloXY[1] - ROSCA.L - 30, -cuelloXY[0] + hc, cuelloXY[1] + 6, 1.5);
+      for (let i = 0; i < n; i++) if (c[i]) fem[i] = Math.max(1.2, Math.min(fem[i], Hb - ROSCA.R - 2)); }
     if (plano) { /* escalón del grosor de la malla donde apoya su borde plano, y pared alrededor siguiendo la forma */
       const esc = K.mirrorTo(F, sub(dilate(F, St, escalon), St), 0, 0), fuera = K.mirrorTo(F, dilate(F, St, escalon + paredH), 0, 0);
       for (let i = 0; i < n; i++) if (esc[i]) fem[i] = Math.max(1.2, Math.min(fem[i], Hb - (p.malla ? p.eMalla : t)));
@@ -1438,7 +1439,8 @@ const TERMO = (o = {}) => [{ ...shp(o.forma || 'corazon', ['corazon', 'circulo',
   num('eMalla', 'Grosor de la malla', 0.8, 0.4, 2, 0.1, { show: p => p.malla }), num('pestana', 'Pestaña plana alrededor de la malla', 2, 0, 10, 0.5, { show: p => p.malla }), num('minDiseno', 'Grosor mínimo de las líneas del dibujo', 1.4, 0.8, 3, 0.1, { show: p => p.malla && p.diseno !== 'ninguno' }), sel('disenoMalla', 'Diseño en la malla', 'macizo', { macizo: 'Macizo (como bordado)', malla: 'Malla de otro color' }, { show: p => p.malla && p.diseno !== 'ninguno' }), chk('anilla', 'Pestaña para colgar', false, { show: p => p.malla }), num('movColgar', 'Mover la pestaña', 0, -100, 100, 5, { unit: '%', show: p => p.malla && p.anilla }), sel('trasera', 'Malla trasera', o.trasera || 'si', { si: 'Sí', no: 'Solo la delantera' }, { show: p => p.malla }),
   sel('cierre', 'Cierre', 'rosca', { rosca: 'Rosca arriba + clip abajo', remaches: 'Remaches a presión', pivotes: 'Pivotes pequeños', no: 'Ninguno' }, { show: p => p.malla && p.trasera !== 'no' }),
   num('holgRem', 'Ajuste del remache (más = más suelto)', 0.1, 0, 0.3, 0.02, { show: p => p.malla && p.trasera !== 'no' && p.cierre === 'remaches' }),
-  num('holgRosca', 'Holgura de la rosca', 0.35, 0.15, 0.8, 0.05, { show: p => p.malla && p.trasera !== 'no' && p.cierre === 'rosca' })];
+  num('holgRosca', 'Holgura de la rosca', 0.35, 0.15, 0.8, 0.05, { show: p => p.malla && p.trasera !== 'no' && p.cierre === 'rosca' }),
+  num('holgCanal', 'Holgura del hueco de la boquilla en el molde', 1.5, 0.5, 4, 0.25, { show: p => p.malla && p.trasera !== 'no' && p.cierre === 'rosca' })];
 M('termo', 'Generador de termoformado', 'Cualquier forma, en cúpula acolchada o en bandeja, con texto, imagen o copo.', TERMO({ texto: 'Mamá', forma: 'corazon', eva: 1, anilla: true }), p => gTermo(p));
 M('termo-nav', 'Molde de termoformado navideño', 'Bolsita de malla de dos caras con mensaje de Navidad, y sus moldes.', TERMO({ texto: 'Feliz\nNavidad', forma: 'corazon', eva: 1, anilla: true }), p => gTermo(p));
 M('termo-copo', 'Molde de termoformado: copo', 'Bolsita de malla con un copo de nieve, y sus moldes.', TERMO({ forma: 'flor', diseno: 'copo', texto: '', eva: 1, anilla: true }), p => gTermo(p));
