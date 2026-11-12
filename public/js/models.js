@@ -708,7 +708,7 @@ function gTermo(p) {
   const si = sigue ? imgFit(p.imgD, p.tam, p.tam) : null;
   const W = sigue ? si.w + 2 * mg : p.tam, Hs = sigue ? si.h + 2 * mg : (p.forma === 'cuadrado' || p.forma === 'circulo' || p.forma === 'flor') ? W : W * (p.forma === 'ovalo' ? 0.7 : 1);
   const silueta = (G) => { const im = G.image(p.imgD, 0, 0, si.w, si.h, { thr: p.umbral }); return { im, S: dilate(G, K.fillHoles(G, close(G, im, 1.5)), mg) }; };
-  const t = p.eva, H = p.alto, R = Math.max(1, p.redondeo), E = p.relieveD, sign = p.estilo === 'hundido' ? -1 : 1;
+  const t = p.eva, H = p.alto, R = Math.max(1, p.redondeo), E = (p.estilo || 'liso') === 'liso' ? 0 : p.relieveD, sign = p.estilo === 'hundido' ? -1 : 1;
   /* molde "plano" (como el vídeo): hembra = bandeja con escalón para el borde de la malla; macho = placa con la silueta */
   const plano = (p.molde || 'plano') === 'plano', cierre = p.cierre || 'remaches';
   const remaches = p.malla && p.trasera !== 'no' && cierre === 'remaches';
@@ -771,6 +771,9 @@ function gTermo(p) {
     else if (p.diseno === 'imagen') { const sz = imgFit(p.imgD, W * ff[0], Hs * ff[1] * 1.4); D2 = dilate(G, G.image(p.imgD, W * (ff[2] || 0), Hs * (ff[3] || 0), sz.w, sz.h, { thr: p.umbral }), 0.3); }
     else if (p.diseno === 'copo') D2 = K.snowflake(G, W * (ff[2] || 0), Hs * (ff[3] || 0), Math.min(W * ff[0], Hs * ff[1] * 1.4) * 0.5, 2.2, p.semilla);
     D2 = and(D2, erode(G, flat, p.bordeMalla + 1));
+    /* dibujo más robusto: engorda solo las líneas finas hasta el grosor mínimo y quita trocitos sueltos (se rompían al despegarlo de la cama) */
+    if (K.count(D2)) { const rr = (p.minDiseno ?? 1.4) / 2; const fino = sub(D2, K.open(G, D2, rr)); D2 = and(or(D2, dilate(G, fino, rr * 0.8)), erode(G, flat, p.bordeMalla + 1));
+      let lim = G.blank(); for (const c of K.components(G, D2, Math.round(4 * G.res * G.res))) lim = or(lim, c); D2 = lim; }
     const lat = G.pattern(p.rejilla, p.paso, p.hilo, 1); const rim = ring(G, flat, p.bordeMalla);
     let solid = rim;
     let pegC = null;
@@ -806,8 +809,13 @@ function gTermo(p) {
     }
     const conBoquilla = (nombre, malla, b) => { const u = b && K.unionMeshes([malla, b]); if (u) return [LM(nombre + ' (con boquilla)', u, p.colorMalla || C.rojo)];
       return b ? [LM(nombre, malla, p.colorMalla || C.rojo), LM('Boquilla de ' + nombre.toLowerCase(), b, p.colorMalla || C.rojo)] : [LM(nombre, malla, p.colorMalla || C.rojo)]; };
-    parts.push(...conBoquilla('Malla delantera', mm(G, sub(or(body, base), boca), 0, p.eMalla, dxF, dy), bq && bq.del));
-    if (K.count(D2)) parts.push(LM('Malla delantera: diseño', mm(G, sub(dsg, solid), 0, p.eMalla, dxF, dy), C.blanco));
+    /* el dibujo se apoya en una capa fina del color de la malla (la primera capa) que lo une a ella por toda su superficie;
+       antes solo tocaba la malla por los lados y se soltaba al despegarlo de la cama. Se ve por arriba, donde el texto se lee al derecho */
+    const dMask = sub(dsg, solid), ancla = K.count(D2) ? Math.min(0.24, p.eMalla / 3) : 0;
+    let mallaF = mm(G, sub(or(body, base), boca), 0, p.eMalla, dxF, dy);
+    if (ancla) { const capa = mm(G, dMask, 0, ancla, dxF, dy); const u = K.unionMeshes([mallaF, capa]); mallaF = u || K.mergeMeshes([mallaF, capa]); }
+    parts.push(...conBoquilla('Malla delantera', mallaF, bq && bq.del));
+    if (K.count(D2)) parts.push(LM('Malla delantera: diseño', mm(G, dMask, ancla, p.eMalla, dxF, dy), C.blanco));
     if (two2) { if (K.count(pins)) parts.push(LM('Pivotes de cierre', mm(G, pins, p.eMalla, p.eMalla + 2, dxF, dy), p.colorMalla || C.rojo));
       /* la trasera es la misma figura en espejo: se voltea la malla 3D (exacto), no la máscara (el volteo de píxeles dejaba aristas sueltas) */
       const backU = sub(or(and(lat, flat), solid, base), boca, agujeros, dilate(G, pins, 0.2));
@@ -1345,13 +1353,13 @@ const TERMO = (o = {}) => [{ ...shp(o.forma || 'corazon', ['corazon', 'circulo',
   img('imgD', 'Imagen del diseño', 'silueta', { show: p => p.diseno === 'imagen' }), { ...UMB, show: p => p.diseno === 'imagen' },
   chk('formaImg', 'La forma sigue la silueta de la imagen', true, { show: p => p.diseno === 'imagen' }), num('margenImg', 'Margen alrededor de la imagen', 6, 2, 15, 0.5, { show: p => p.diseno === 'imagen' && p.formaImg }),
   { ...pat('rombos', 'patron', 'Patrón'), show: p => p.diseno === 'patron' }, num('sep', 'Separación del patrón', 6, 3, 15, 0.5, { show: p => p.diseno === 'patron' }), cnt('semilla', 'Variante', 3, 1, 50, { show: p => p.diseno === 'copo' || p.diseno === 'patron' }),
-  sel('estilo', 'Diseño en el molde', 'relieve', { relieve: 'En relieve', hundido: 'Hundido' }),
-  num('alto', 'Altura', o.alto || 8, 2, 40), num('redondeo', 'Redondeo del borde', 7, 1, 25, 0.5, { show: p => p.perfil !== 'bandeja' }), num('relieveD', 'Profundidad del diseño', 1.2, 0.4, 3, 0.1),
+  sel('estilo', 'Diseño en el molde', 'liso', { liso: 'Liso (sin dibujo, como el vídeo)', relieve: 'En relieve', hundido: 'Hundido' }),
+  num('alto', 'Altura', o.alto || 8, 2, 40), num('redondeo', 'Redondeo del borde', 7, 1, 25, 0.5, { show: p => p.perfil !== 'bandeja' }), num('relieveD', 'Profundidad del diseño', 1.2, 0.4, 3, 0.1, { show: p => p.estilo !== 'liso' }),
   num('eva', 'Holgura entre moldes (grosor de la malla o lámina)', o.eva || 2, 0.5, 6, 0.1), num('base', 'Grosor de la base', 3, 2, 8, 0.5), sel('piezas', 'Piezas', 'ambas', { ambas: 'Macho + hembra', macho: 'Solo macho' }),
   sel('molde', 'Tipo de molde', 'plano', { plano: 'Bandeja + placa con la forma', bloque: 'Bloque cuadrado' }), chk('guias', 'Guías de centrado en las esquinas', true, { show: p => p.molde === 'bloque' }),
   chk('malla', 'Incluir la figura de malla para imprimir', o.malla ?? true), sel('rejilla', 'Agujeros de la malla', 'cuadricula', { cuadricula: 'Cuadrados', rombos: 'Rombos', panal: 'Hexágonos', mosaico: 'Mosaico' }, { show: p => p.malla }),
   num('paso', 'Tamaño de agujero', 3.2, 2, 8, 0.2, { show: p => p.malla }), num('hilo', 'Grosor del hilo', 0.9, 0.5, 2, 0.1, { show: p => p.malla }), num('bordeMalla', 'Borde macizo', 2.5, 1, 6, 0.5, { show: p => p.malla }),
-  num('eMalla', 'Grosor de la malla', 0.8, 0.4, 2, 0.1, { show: p => p.malla }), num('pestana', 'Pestaña plana alrededor de la malla', 2, 0, 10, 0.5, { show: p => p.malla }), sel('disenoMalla', 'Diseño en la malla', 'macizo', { macizo: 'Macizo (como bordado)', malla: 'Malla de otro color' }, { show: p => p.malla && p.diseno !== 'ninguno' }), chk('anilla', 'Pestaña para colgar', true, { show: p => p.malla }), sel('trasera', 'Malla trasera', o.trasera || 'si', { si: 'Sí', no: 'Solo la delantera' }, { show: p => p.malla }),
+  num('eMalla', 'Grosor de la malla', 0.8, 0.4, 2, 0.1, { show: p => p.malla }), num('pestana', 'Pestaña plana alrededor de la malla', 2, 0, 10, 0.5, { show: p => p.malla }), num('minDiseno', 'Grosor mínimo de las líneas del dibujo', 1.4, 0.8, 3, 0.1, { show: p => p.malla && p.diseno !== 'ninguno' }), sel('disenoMalla', 'Diseño en la malla', 'macizo', { macizo: 'Macizo (como bordado)', malla: 'Malla de otro color' }, { show: p => p.malla && p.diseno !== 'ninguno' }), chk('anilla', 'Pestaña para colgar', true, { show: p => p.malla }), sel('trasera', 'Malla trasera', o.trasera || 'si', { si: 'Sí', no: 'Solo la delantera' }, { show: p => p.malla }),
   sel('cierre', 'Cierre', 'remaches', { remaches: 'Remaches a presión', rosca: 'Boquilla con tapón de rosca + pinzas', pivotes: 'Pivotes pequeños', no: 'Ninguno' }, { show: p => p.malla && p.trasera !== 'no' }),
   num('holgRem', 'Ajuste del remache (más = más suelto)', 0.1, 0, 0.3, 0.02, { show: p => p.malla && p.trasera !== 'no' && p.cierre === 'remaches' }),
   num('holgRosca', 'Holgura de la rosca', 0.35, 0.15, 0.8, 0.05, { show: p => p.malla && p.trasera !== 'no' && p.cierre === 'rosca' })];
