@@ -716,13 +716,45 @@ function clipCierre(eMalla, L = 9) {
   return k(cs.extrude(an));
 }
 
+/* imagen en color → capas por color (k-medias). Fondo = transparente, o el color que domina el borde de la imagen.
+   Devuelve { all, capas: [{ m, hex }] } ordenadas de la más clara a la más oscura. */
+function capasColor(F, img, cx, cy, iw, ih, nCol) {
+  const d = F.rgba(img, cx, cy, iw, ih), { w, h } = F, n = w * h;
+  /* rectángulo de la imagen, 2 píxeles hacia dentro para no leer el borde suavizado */
+  const x0 = Math.max(1, Math.ceil((cx - iw / 2) * F.res + w / 2) + 2), x1 = Math.min(w - 2, Math.floor((cx + iw / 2) * F.res + w / 2) - 2), y0 = Math.max(1, Math.ceil((cy - ih / 2) * F.res + h / 2) + 2), y1 = Math.min(h - 2, Math.floor((cy + ih / 2) * F.res + h / 2) - 2);
+  const dentro = new Uint8Array(n); for (let j = y0; j <= y1; j++) for (let i = x0; i <= x1; i++) { const q = j * w + i; if (d[q * 4 + 3] >= 100) dentro[q] = 1; }
+  /* fondo opaco: el color más repetido en el contorno del rectángulo de la imagen */
+  const cnt = new Map(); const borde = (i, j) => { const q = (j * w + i) * 4; if (d[q + 3] < 100) return; const key = (d[q] >> 4) << 8 | (d[q + 1] >> 4) << 4 | d[q + 2] >> 4; cnt.set(key, (cnt.get(key) || 0) + 1); };
+  for (let i = x0; i <= x1; i++) { borde(i, y0); borde(i, y1); } for (let j = y0; j <= y1; j++) { borde(x0, j); borde(x1, j); }
+  let bg = null, best = 0; for (const [k2, v] of cnt) if (v > best) { best = v; bg = k2; }
+  const per = 2 * (x1 - x0 + y1 - y0); if (bg !== null && best > per * 0.35) { const br = ((bg >> 8) << 4) + 8, bgG = (((bg >> 4) & 15) << 4) + 8, bb = ((bg & 15) << 4) + 8;
+    for (let q = 0; q < n; q++) if (dentro[q]) { const k3 = q * 4; if (Math.abs(d[k3] - br) + Math.abs(d[k3 + 1] - bgG) + Math.abs(d[k3 + 2] - bb) < 60) dentro[q] = 0; } }
+  /* k-medias en RGB sobre una muestra */
+  const idx = []; for (let q = 0; q < n; q++) if (dentro[q]) idx.push(q); if (!idx.length) return { all: F.blank(), capas: [] };
+  const paso = Math.max(1, Math.floor(idx.length / 15000)), mu = []; const px = q => [d[q * 4], d[q * 4 + 1], d[q * 4 + 2]];
+  const dist = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+  mu.push(px(idx[Math.floor(idx.length / 2)]));
+  while (mu.length < nCol) { let far = null, fd = -1; for (let t = 0; t < idx.length; t += paso) { const c = px(idx[t]); let m = Infinity; for (const u of mu) m = Math.min(m, dist(c, u)); if (m > fd) { fd = m; far = c; } } if (fd < 900) break; mu.push(far); }
+  for (let it = 0; it < 12; it++) { const sum = mu.map(() => [0, 0, 0, 0]);
+    for (let t = 0; t < idx.length; t += paso) { const c = px(idx[t]); let b = 0, bd = Infinity; mu.forEach((u, k4) => { const dd = dist(c, u); if (dd < bd) { bd = dd; b = k4; } }); const s2 = sum[b]; s2[0] += c[0]; s2[1] += c[1]; s2[2] += c[2]; s2[3]++; }
+    sum.forEach((s2, k4) => { if (s2[3]) mu[k4] = [s2[0] / s2[3], s2[1] / s2[3], s2[2] / s2[3]]; }); }
+  const ms = mu.map(() => new Uint8Array(n));
+  for (const q of idx) { const c = px(q); let b = 0, bd = Infinity; mu.forEach((u, k4) => { const dd = dist(c, u); if (dd < bd) { bd = dd; b = k4; } }); ms[b][q] = 1; }
+  const hex = u => '#' + u.map(v => Math.round(v).toString(16).padStart(2, '0')).join('').toUpperCase();
+  const capas = ms.map((m, k4) => { for (let i = 0; i < w; i++) { m[i] = 0; m[(h - 1) * w + i] = 0; } for (let j = 0; j < h; j++) { m[j * w] = 0; m[j * w + w - 1] = 0; } return { m, hex: hex(mu[k4]), lum: 0.299 * mu[k4][0] + 0.587 * mu[k4][1] + 0.114 * mu[k4][2] }; }).filter(c => K.count(c.m)).sort((a, b) => b.lum - a.lum);
+  const all = F.blank(); for (const c of capas) for (let q = 0; q < n; q++) if (c.m[q]) all[q] = 1;
+  return { all, capas };
+}
+
 /* termoformado: molde macho (cúpula + diseño) y hembra en espejo con holgura para la lámina */
 function gTermo(p) {
   /* con diseño de imagen, la forma puede ser la silueta de la propia imagen (más un margen) */
   const sigue = p.diseno === 'imagen' && p.formaImg !== false && p.imgD, mg = p.margenImg || 6;
   const si = sigue ? imgFit(p.imgD, p.tam, p.tam) : null;
   const W = sigue ? si.w + 2 * mg : p.tam, Hs = sigue ? si.h + 2 * mg : (p.forma === 'cuadrado' || p.forma === 'circulo' || p.forma === 'flor') ? W : W * (p.forma === 'ovalo' ? 0.7 : 1);
-  const silueta = (G) => { const im = G.image(p.imgD, 0, 0, si.w, si.h, { thr: p.umbral }); return { im, S: dilate(G, K.fillHoles(G, close(G, im, 1.5)), mg) }; };
+  const enColor = p.diseno === 'imagen' && p.colorImg === 'color' && p.imgD;
+  const imgM = (G, cx, cy, iw, ih) => enColor ? capasColor(G, p.imgD, cx, cy, iw, ih, p.nColores || 4).all : G.image(p.imgD, cx, cy, iw, ih, { thr: p.umbral });
+  const silueta = (G) => { const im = imgM(G, 0, 0, si.w, si.h); return { im, S: dilate(G, K.fillHoles(G, close(G, im, 1.5)), mg) }; };
   const t = p.eva, H = p.alto, R = Math.max(1, p.redondeo), E = (p.estilo || 'liso') === 'liso' ? 0 : p.relieveD, sign = p.estilo === 'hundido' ? -1 : 1;
   /* molde "plano" (como el vídeo): hembra = bandeja con escalón para el borde de la malla; macho = placa con la silueta */
   const plano = (p.molde || 'plano') === 'plano', cierre = p.cierre || 'rosca';
@@ -738,7 +770,7 @@ function gTermo(p) {
   const fit = FIT[p.forma] || [.6, .45]; let D = F.blank();
   if (sigue) D = silueta(F).im;
   else if (p.diseno === 'texto') { const f = font(p.fuente); const tx = lines(p.texto, 'Feliz Navidad'); const s = fitSize(tx, f, W * fit[0], Hs * fit[1] * 1.3, 1.05); D = F.text(tx, f, s, W * (fit[2] || 0), Hs * (fit[3] || 0), { lh: 1.05 }); }
-  else if (p.diseno === 'imagen') { const s = imgFit(p.imgD, W * fit[0], Hs * fit[1] * 1.4); D = F.image(p.imgD, W * (fit[2] || 0), Hs * (fit[3] || 0), s.w, s.h, { thr: p.umbral }); }
+  else if (p.diseno === 'imagen') { const s = imgFit(p.imgD, W * fit[0], Hs * fit[1] * 1.4); D = imgM(F, W * (fit[2] || 0), Hs * (fit[3] || 0), s.w, s.h); }
   else if (p.diseno === 'copo') D = K.snowflake(F, W * (fit[2] || 0), Hs * (fit[3] || 0), Math.min(W * fit[0], Hs * fit[1] * 1.4) * 0.5, 1.8, p.semilla);
   else if (p.diseno === 'patron') D = F.pattern(p.patron, p.sep, 1.4, p.semilla);
   D = and(D, erode(F, S, R * 0.6 + 1));
@@ -763,7 +795,7 @@ function gTermo(p) {
   const mesh = (arr, dx) => { const m = K.heightMesh(arr, w, h, step); for (let k = 0; k < m.pos.length; k += 3) m.pos[k] += dx; K.fixOrientation(m); return m; };
   const two = p.piezas === 'ambas';
   const off2 = plano ? F.W / 2 + 2 : off;
-  parts.push(LM('Molde macho', plano ? K.translateMesh(K.maskHeightMesh(F, S, k => male[k], 0), two ? -off2 : 0, 0) : mesh(male, two ? -off : 0), C.azul));
+  parts.push(LM('Molde macho', plano ? K.translateMesh(K.maskHeightMesh(F, S, k => male[k] + 6, 0) /* +6 mm de placa: sobresale de la hembra y empuja la malla hasta el fondo */, two ? -off2 : 0, 0) : mesh(male, two ? -off : 0), C.azul));
   if (two) {
     const St = dilate(F, S, t); const ht = tray ? dome(St, R + t, t * 0.4) : dome(St, R + t); const Dt = sign > 0 ? dilate(F, D, t * 0.5) : erode(F, D, Math.min(t * 0.5, 0.4)); const et = emb(Dt);
     const Hb = Math.max(base + H + E + 3, pinH + 4); const fem = new Float32Array(n);
@@ -783,13 +815,18 @@ function gTermo(p) {
     const sg = sigue ? silueta(G) : null;
     let S2 = sigue ? sg.S : G.shape(p.forma, 0, 0, W, Hs); let flat = K.close(G, dilate(G, S2, extra), Math.min(3, extra));
     let D2 = G.blank(); const ff = FIT[p.forma] || [.6, .45];
-    if (sigue) D2 = dilate(G, sg.im, 0.3);
+    let capas = null;
+    if (sigue && enColor) { const cc = capasColor(G, p.imgD, 0, 0, si.w, si.h, p.nColores || 4); capas = cc.capas; D2 = cc.all; }
+    else if (sigue) D2 = dilate(G, sg.im, 0.3);
     else if (p.diseno === 'texto') { const f = font(p.fuente); const tx = lines(p.texto, 'Feliz Navidad'); const sz = fitSize(tx, f, W * ff[0], Hs * ff[1] * 1.3, 1.05); D2 = G.text(tx, f, sz, W * (ff[2] || 0), Hs * (ff[3] || 0), { lh: 1.05, bold: 0.5 }); }
-    else if (p.diseno === 'imagen') { const sz = imgFit(p.imgD, W * ff[0], Hs * ff[1] * 1.4); D2 = dilate(G, G.image(p.imgD, W * (ff[2] || 0), Hs * (ff[3] || 0), sz.w, sz.h, { thr: p.umbral }), 0.3); }
+    else if (p.diseno === 'imagen') { const sz = imgFit(p.imgD, W * ff[0], Hs * ff[1] * 1.4); if (enColor) { const cc = capasColor(G, p.imgD, W * (ff[2] || 0), Hs * (ff[3] || 0), sz.w, sz.h, p.nColores || 4); capas = cc.capas; D2 = cc.all; } else D2 = dilate(G, G.image(p.imgD, W * (ff[2] || 0), Hs * (ff[3] || 0), sz.w, sz.h, { thr: p.umbral }), 0.3); }
     else if (p.diseno === 'copo') D2 = K.snowflake(G, W * (ff[2] || 0), Hs * (ff[3] || 0), Math.min(W * ff[0], Hs * ff[1] * 1.4) * 0.5, 2.2, p.semilla);
     D2 = and(D2, erode(G, flat, p.bordeMalla + 1));
     /* dibujo más robusto: engorda solo las líneas finas hasta el grosor mínimo y quita trocitos sueltos (se rompían al despegarlo de la cama) */
-    if (K.count(D2)) { const rr = (p.minDiseno ?? 1.4) / 2; const fino = sub(D2, K.open(G, D2, rr)); D2 = and(or(D2, dilate(G, fino, rr * 0.8)), erode(G, flat, p.bordeMalla + 1));
+    if (capas) { /* en color: cada zona se queda con su color; los trocitos sueltos de cada color se quitan (vuelven a ser malla) */
+      const lim = Math.round(3 * G.res * G.res), ok = erode(G, flat, p.bordeMalla + 1); D2 = G.blank();
+      capas = capas.map(c => { let m = and(c.m, ok), keep = G.blank(); for (const cc of K.components(G, m, lim)) keep = or(keep, cc); D2 = or(D2, keep); return { m: keep, hex: c.hex }; }).filter(c => K.count(c.m)); }
+    else if (K.count(D2)) { const rr = (p.minDiseno ?? 1.4) / 2; const fino = sub(D2, K.open(G, D2, rr)); D2 = and(or(D2, dilate(G, fino, rr * 0.8)), erode(G, flat, p.bordeMalla + 1));
       let lim = G.blank(); for (const c of K.components(G, D2, Math.round(4 * G.res * G.res))) lim = or(lim, c); D2 = lim; }
     const lat = G.pattern(p.rejilla, p.paso, p.hilo, 1); const rim = ring(G, flat, p.bordeMalla);
     let solid = rim;
@@ -840,7 +877,8 @@ function gTermo(p) {
     let mallaF = mm(G, sub(or(body, base, oreja), boca, agOreja), 0, p.eMalla, dxF, dy);
     if (ancla) { const capa = mm(G, dMask, 0, ancla, dxF, dy); const u = K.unionMeshes([mallaF, capa]); mallaF = u || K.mergeMeshes([mallaF, capa]); }
     parts.push(...conBoquilla('Malla delantera', mallaF, bq && bq.del));
-    if (K.count(D2)) parts.push(LM('Malla delantera: diseño', mm(G, dMask, ancla, p.eMalla, dxF, dy), C.blanco));
+    if (capas) capas.forEach((c, i) => { const m = and(c.m, dMask); if (K.count(m)) parts.push(LM('Malla delantera: color ' + (i + 1), mm(G, m, ancla, p.eMalla, dxF, dy), c.hex)); });
+    else if (K.count(D2)) parts.push(LM('Malla delantera: diseño', mm(G, dMask, ancla, p.eMalla, dxF, dy), C.blanco));
     if (two2) { if (K.count(pins)) parts.push(LM('Pivotes de cierre', mm(G, pins, p.eMalla, p.eMalla + 2, dxF, dy), p.colorMalla || C.rojo));
       /* la trasera es la misma figura en espejo: se voltea la malla 3D (exacto), no la máscara (el volteo de píxeles dejaba aristas sueltas) */
       const backU = sub(or(and(lat, flat), solid, base, oreja), boca, agujeros, agOreja, dilate(G, pins, 0.2));
@@ -1375,11 +1413,14 @@ M('organizador-hex', 'Organizador de panal', 'Celdas hexagonales.', [cnt('cols',
 const TERMO = (o = {}) => [{ ...shp(o.forma || 'corazon', ['corazon', 'circulo', 'cuadrado', 'ovalo', 'estrella', 'flor', 'lazo', 'nube', 'hexagono', 'bola', 'arbol', 'galleta', 'casa', 'campana']), show: p => !(p.diseno === 'imagen' && p.formaImg) }, sel('perfil', 'Perfil', o.perfil || 'cupula', { cupula: 'Cúpula acolchada', bandeja: 'Bandeja (cajita)' }), num('angulo', 'Inclinación de pared', 70, 45, 85, 1, { unit: '°', show: p => p.perfil === 'bandeja' }),
   num('tam', 'Tamaño', o.tam || 70, 30, 150), sel('diseno', 'Diseño', o.diseno || 'texto', { texto: 'Texto', imagen: 'Imagen', copo: 'Copo de nieve', patron: 'Patrón', ninguno: 'Liso' }),
   area('texto', 'Texto', o.texto ?? 'Feliz\nNavidad', { show: p => p.diseno === 'texto' }), fnt('fuente', 'Fuente', o.fuente || 'pacifico', { show: p => p.diseno === 'texto' }),
-  img('imgD', 'Imagen del diseño', 'silueta', { show: p => p.diseno === 'imagen' }), { ...UMB, show: p => p.diseno === 'imagen' },
+  img('imgD', 'Imagen del diseño', 'silueta', { show: p => p.diseno === 'imagen' }),
+  sel('colorImg', 'Imagen', 'color', { color: 'En color (detecta los colores)', byn: 'Blanco y negro (umbral)' }, { show: p => p.diseno === 'imagen' }),
+  cnt('nColores', 'Número de colores', 4, 2, 8, { show: p => p.diseno === 'imagen' && p.colorImg !== 'byn' }),
+  { ...UMB, show: p => p.diseno === 'imagen' && p.colorImg === 'byn' },
   chk('formaImg', 'La forma sigue la silueta de la imagen', true, { show: p => p.diseno === 'imagen' }), num('margenImg', 'Margen alrededor de la imagen', 6, 2, 15, 0.5, { show: p => p.diseno === 'imagen' && p.formaImg }),
   { ...pat('rombos', 'patron', 'Patrón'), show: p => p.diseno === 'patron' }, num('sep', 'Separación del patrón', 6, 3, 15, 0.5, { show: p => p.diseno === 'patron' }), cnt('semilla', 'Variante', 3, 1, 50, { show: p => p.diseno === 'copo' || p.diseno === 'patron' }),
   sel('estilo', 'Diseño en el molde', 'liso', { liso: 'Liso (sin dibujo, como el vídeo)', relieve: 'En relieve', hundido: 'Hundido' }),
-  num('alto', 'Altura', o.alto || 8, 2, 40), num('redondeo', 'Redondeo del borde', 7, 1, 25, 0.5, { show: p => p.perfil !== 'bandeja' }), num('relieveD', 'Profundidad del diseño', 1.2, 0.4, 3, 0.1, { show: p => p.estilo !== 'liso' }),
+  num('alto', 'Altura (profundidad de cada mitad)', o.alto || 12, 2, 40), num('redondeo', 'Redondeo del borde', 7, 1, 25, 0.5, { show: p => p.perfil !== 'bandeja' }), num('relieveD', 'Profundidad del diseño', 1.2, 0.4, 3, 0.1, { show: p => p.estilo !== 'liso' }),
   num('eva', 'Holgura entre moldes (grosor de la malla o lámina)', o.eva || 2, 0.5, 6, 0.1), num('base', 'Grosor de la base', 3, 2, 8, 0.5), sel('piezas', 'Piezas', 'ambas', { ambas: 'Macho + hembra', macho: 'Solo macho' }),
   sel('molde', 'Tipo de molde', 'plano', { plano: 'Bandeja + placa con la forma', bloque: 'Bloque cuadrado' }), chk('guias', 'Guías de centrado en las esquinas', true, { show: p => p.molde === 'bloque' }),
   chk('malla', 'Incluir la figura de malla para imprimir', o.malla ?? true), sel('rejilla', 'Agujeros de la malla', 'cuadricula', { cuadricula: 'Cuadrados', rombos: 'Rombos', panal: 'Hexágonos', mosaico: 'Mosaico' }, { show: p => p.malla }),

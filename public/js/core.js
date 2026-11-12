@@ -140,6 +140,8 @@ function frame(W, H, opt = {}) {
     clearBorder(F, m); return m;
   };
   /* luminancia 0..1 (1 = blanco); fuera de la imagen = -1 */
+  /* píxeles RGBA de la imagen colocada en el marco (para separar colores) */
+  F.rgba = (img, cx, cy, iw, ih) => { const { ctx } = F.canvas(); ctx.setTransform(res, 0, 0, res, w / 2, h / 2); ctx.drawImage(img, cx - iw / 2, cy - ih / 2, iw, ih); return ctx.getImageData(0, 0, w, h).data; };
   F.lum = (img, cx, cy, iw, ih) => {
     const { ctx } = F.canvas(); ctx.setTransform(res, 0, 0, res, w / 2, h / 2);
     ctx.drawImage(img, cx - iw / 2, cy - ih / 2, iw, ih);
