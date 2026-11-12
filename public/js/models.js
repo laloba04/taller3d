@@ -704,14 +704,16 @@ function remache(eMalla, holg) {
   return { pin, tapa };
 }
 
-/* clip de cierre: tira plana con cabeza en un extremo y flecha partida en el otro; atraviesa las ranuras de las dos mallas
-   (se empuja con un alicate) y la flecha se abre al pasar y queda enganchada. Se imprime tumbado. */
+/* clip de cierre tipo pinza de pelo: el puente va metido en las ranuras de las dos mallas, las patas bajan una por cada cara
+   hasta pasar el borde y allí la pata de delante engancha la de detrás. Se cierra apretando con el alicate (el gancho salta y hace clic)
+   y se abre empujando el gancho hacia fuera. Se imprime ya cerrado, tumbado (alto = ancho de la pinza), con 0,3 mm de holgura en el gancho. */
 function clipCierre(eMalla) {
-  const MF = K.mf(), k = K.keep; const e = 1.2, Ls = 2 * eMalla + 0.4, x1 = 2 + Ls, x2 = x1 + 3.2;
-  const r = (x0, y0, xa, ya) => k(k(MF.CrossSection.square([xa - x0, ya - y0])).translate([x0, y0]));
-  const flecha = k(new MF.CrossSection([[[x1, -3.2], [x2, -1.4], [x2, 1.4], [x1, 3.2]]]));
-  const cs = k(k(MF.CrossSection.union([r(0, -4.5, 2, 4.5), r(1.9, -2.5, x1 + 0.1, 2.5), flecha])).subtract(r(x1 - 1.2, -0.45, x2 + 1, 0.45)));
-  return k(cs.extrude(e));
+  const MF = K.mf(), k = K.keep; const w = 1.0, g = 2 * eMalla + 0.2, L = 9, an = 5;
+  const r = (x0, y0, x1, y1) => k(k(MF.CrossSection.square([x1 - x0, y1 - y0])).translate([x0, y0]));
+  const hb = -w - 0.9;
+  const una = k(new MF.CrossSection([[[L + 0.41, -w - 0.3], [L - 0.4, -w - 0.3], [L + 0.41, hb]]]));
+  const cs = k(MF.CrossSection.union([r(-1.2, -w, 0.01, g + w), r(0, -w, L, 0), r(0, g, L + 1.2, g + w), r(L + 0.4, hb, L + 1.2, g + 0.01), una]));
+  return k(cs.extrude(an));
 }
 
 /* termoformado: molde macho (cúpula + diseño) y hembra en espejo con holgura para la lámina */
@@ -831,7 +833,7 @@ function gTermo(p) {
        el clip atraviesa las dos ranuras y se engancha (como en el vídeo) */
     let oreja = G.blank(), agOreja = G.blank(), clip = false;
     if (rosca && two2) { const fb = bbox(G, flat); const [xb, yb] = extreme(G, flat, 'bottom', fb.cx - 1.5, fb.cx + 1.5);
-      oreja = and(G.rect(xb - 6.5, yb - 8, xb + 6.5, yb + 1, 1.5), flat); agOreja = G.rect(xb - 2.8, yb - 4 - 0.8, xb + 2.8, yb - 4 + 0.8, 0.3); clip = true; }
+      oreja = and(G.rect(xb - 7, yb - 9, xb + 7, yb + 1, 1.5), flat); agOreja = G.rect(xb - 3.1, yb - 5 - 1, xb + 3.1, yb - 5 + 1, 0.3); clip = true; }
     let mallaF = mm(G, sub(or(body, base, oreja), boca, agOreja), 0, p.eMalla, dxF, dy);
     if (ancla) { const capa = mm(G, dMask, 0, ancla, dxF, dy); const u = K.unionMeshes([mallaF, capa]); mallaF = u || K.mergeMeshes([mallaF, capa]); }
     parts.push(...conBoquilla('Malla delantera', mallaF, bq && bq.del));
@@ -842,7 +844,7 @@ function gTermo(p) {
       const mB = K.maskToMesh(G, backU, 0, p.eMalla); for (let q = 0; q < mB.pos.length; q += 3) mB.pos[q] = -mB.pos[q]; K.fixOrientation(mB);
       const back = K.translateMesh(mB, dxB, dy);
       parts.push(...conBoquilla('Malla trasera (en espejo)', back, bq && bq.tras)); }
-    if (clip) { const yc = dy - G.H / 2 - 14; parts.push(LM('Clip de cierre', K.solidMesh(K.keep(clipCierre(p.eMalla).translate([6, yc, 0]))), C.rosa)); }
+    if (clip) { const yc = dy - G.H / 2 - 14; parts.push(LM('Pinza de cierre', K.solidMesh(K.keep(clipCierre(p.eMalla).translate([6, yc, 0]))), C.rosa)); }
     if (remaches && ptsR.length && K.hasCSG()) { const rm = remache(p.eMalla, p.holgRem ?? 0.1); const yc = dy - G.H / 2 - 6, sep = 2 * REM.rc + 3, x0 = -(ptsR.length - 1) * sep / 2;
       const fila = (s3, y) => K.union(ptsR.map((_, i) => K.keep(s3.translate([x0 + i * sep, y, 0]))));
       parts.push(LM('Remaches: pines', K.solidMesh(fila(rm.pin, yc)), C.negro), LM('Remaches: tapitas', K.solidMesh(fila(rm.tapa, yc - sep)), C.negro)); }
@@ -850,7 +852,7 @@ function gTermo(p) {
       parts.push(LM('Tapón de rosca', bq.tapon, C.blanco));
     }
   }
-  return { layers: parts, note: (p.malla ? 'Imprime las mallas en plano. Calienta cada una (pistola de calor o agua muy caliente) y presiónala entre el macho y la hembra; la trasera sale en espejo, así que se pone en el molde dada la vuelta. ' + (remaches ? 'Junta las dos mallas por la pestaña haciendo coincidir los agujeros, mete las chuches, pasa un pin por cada agujero y presiona su tapita hasta que quede firme (si entra floja o no entra, cambia el ajuste del remache). Imprime los remaches a 0,12–0,16 mm. ' : rosca ? 'Junta las dos mallas por el borde: las medias boquillas forman una boquilla con rosca; mete las chuches por ella, enrosca el tapón arriba (su aro sirve para colgarlo con una cinta) y abajo junta las dos ranuras y pasa el clip por ellas, con la flecha por delante, empujando con un alicate hasta que la flecha se abra al otro lado y quede enganchada. Imprime tapón y clip a 0,16 mm. ' : p.malla && p.trasera !== 'no' && p.cierre !== 'no' ? 'Después une las dos por el borde encajando los pivotes. ' : '') : '') + 'Calienta la lámina (EVA o goma) y présala entre el macho y la hembra dada la vuelta. El grosor de lámina ajusta la holgura.' + (guias ? ' Recorta la lámina para que no tape los cuatro pivotes de las esquinas.' : '') };
+  return { layers: parts, note: (p.malla ? 'Imprime las mallas en plano. Calienta cada una (pistola de calor o agua muy caliente) y presiónala entre el macho y la hembra; la trasera sale en espejo, así que se pone en el molde dada la vuelta. ' + (remaches ? 'Junta las dos mallas por la pestaña haciendo coincidir los agujeros, mete las chuches, pasa un pin por cada agujero y presiona su tapita hasta que quede firme (si entra floja o no entra, cambia el ajuste del remache). Imprime los remaches a 0,12–0,16 mm. ' : rosca ? 'Junta las dos mallas por el borde: las medias boquillas forman una boquilla con rosca; mete las chuches por ella, enrosca el tapón arriba (su aro sirve para colgarlo con una cinta) y abajo mete el puente de la pinza por las dos ranuras, con una pata por cada cara, y apriétala con un alicate hasta que el gancho haga clic por debajo del borde; para abrirla, empuja el gancho hacia fuera. Imprime tapón y pinza a 0,16 mm. ' : p.malla && p.trasera !== 'no' && p.cierre !== 'no' ? 'Después une las dos por el borde encajando los pivotes. ' : '') : '') + 'Calienta la lámina (EVA o goma) y présala entre el macho y la hembra dada la vuelta. El grosor de lámina ajusta la holgura.' + (guias ? ' Recorta la lámina para que no tape los cuatro pivotes de las esquinas.' : '') };
 }
 
 
