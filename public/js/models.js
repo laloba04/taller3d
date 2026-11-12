@@ -767,7 +767,9 @@ function gTermo(p) {
   let S;
   if (sigue) S = silueta(F).S;
   else S = F.shape(p.forma, 0, 0, W, Hs);
-  const fit = FIT[p.forma] || [.6, .45]; let D = F.blank();
+  /* tamaño del dibujo: escala el hueco que ocupa dentro de la forma (100 % = como antes); lo que se salga se recorta por el borde */
+  const kD = (p.tamDiseno ?? 100) / 100, escF = f => [f[0] * kD, f[1] * kD, f[2], f[3]];
+  const fit = escF(FIT[p.forma] || [.6, .45]); let D = F.blank();
   if (sigue) D = silueta(F).im;
   else if (p.diseno === 'texto') { const f = font(p.fuente); const tx = lines(p.texto, 'Feliz Navidad'); const s = fitSize(tx, f, W * fit[0], Hs * fit[1] * 1.3, 1.05); D = F.text(tx, f, s, W * (fit[2] || 0), Hs * (fit[3] || 0), { lh: 1.05 }); }
   else if (p.diseno === 'imagen') { const s = imgFit(p.imgD, W * fit[0], Hs * fit[1] * 1.4); D = imgM(F, W * (fit[2] || 0), Hs * (fit[3] || 0), s.w, s.h); }
@@ -814,7 +816,7 @@ function gTermo(p) {
     const G = frame(W + 2 * extra + 6, Hs + 2 * extra + 6 + (conClip ? 16 : 0), { margin: 4, maxPx: Math.min(900, K.QUALITY.maxPx), res: Math.min(4, K.QUALITY.res) });
     const sg = sigue ? silueta(G) : null;
     let S2 = sigue ? sg.S : G.shape(p.forma, 0, 0, W, Hs); let flat = K.close(G, dilate(G, S2, extra), Math.min(3, extra));
-    let D2 = G.blank(); const ff = FIT[p.forma] || [.6, .45];
+    let D2 = G.blank(); const ff = escF(FIT[p.forma] || [.6, .45]);
     let capas = null;
     if (sigue && enColor) { const cc = capasColor(G, p.imgD, 0, 0, si.w, si.h, p.nColores || 4); capas = cc.capas; D2 = cc.all; }
     else if (sigue) D2 = dilate(G, sg.im, 0.3);
@@ -865,7 +867,6 @@ function gTermo(p) {
       return b ? [LM(nombre, malla, p.colorMalla || C.rojo), LM('Boquilla de ' + nombre.toLowerCase(), b, p.colorMalla || C.rojo)] : [LM(nombre, malla, p.colorMalla || C.rojo)]; };
     /* el dibujo se apoya en una capa fina del color de la malla (la primera capa) que lo une a ella por toda su superficie;
        antes solo tocaba la malla por los lados y se soltaba al despegarlo de la cama. Se ve por arriba, donde el texto se lee al derecho */
-    const dMask = sub(dsg, solid), ancla = K.count(D2) ? Math.min(0.24, p.eMalla / 3) : 0;
     /* cierre de abajo (con la rosca): en las dos mallas, una zona maciza en el borde con una ranura en el mismo sitio;
        el clip atraviesa las dos ranuras y se engancha (como en el vídeo) */
     let oreja = G.blank(), agOreja = G.blank(), clip = false, dClip = 5;
@@ -873,7 +874,14 @@ function gTermo(p) {
       /* orejita redonda que sale del borde de abajo con la ranura dentro: así el resto de la malla no necesita pestaña ancha */
       const yo = yb + 1.5; dClip = 0; agOreja = G.rect(xb - 3.1, yo - 1, xb + 3.1, yo + 1, 0.3);
       oreja = or(G.disk(xb, yo, 5.5), and(G.rect(xb - 5.5, yb - 5, xb + 5.5, yo, 1.5), dilate(G, flat, 0.3))); clip = true; }
-    let mallaF = mm(G, sub(or(body, base, oreja), boca, agOreja), 0, p.eMalla, dxF, dy);
+    /* el dibujo no se mete en la base de la boquilla, su paso ni la orejita del clip (con dibujos grandes se pisaban y la malla salía abierta) */
+    const zona = dilate(G, or(base, boca, oreja), 0.8), bodyX = K.count(and(D2, zona)) ? sub(or(and(lat, flat), solid), sub(D2, zona), agujeros) : body;
+    const dMask = sub(dsg, solid, zona), ancla = K.count(D2) && !p.dbg ? Math.min(0.24, p.eMalla / 3) : 0;
+    /* red de seguridad: si una malla sale con aristas sueltas (pasa con algunas alineaciones de píxeles), se repasa la máscara y se rehace */
+    const mmOk = (mask, z0, z1, dx, dyy) => { let m = mask, me = null;
+      for (let t = 0; t < 3; t++) { me = mm(G, m, z0, z1, dx, dyy); if (!K.hasCSG() || K.checkMesh(me).ok) return me; m = t === 0 ? close(G, m, 0.25) : K.open(G, m, 0.25); }
+      return me; };
+    let mallaF = mmOk(sub(or(bodyX, K.count(and(D2, zona)) ? and(zona, flat) : G.blank(), base, oreja), boca, agOreja), 0, p.eMalla, dxF, dy);
     if (ancla) { const capa = mm(G, dMask, 0, ancla, dxF, dy); const u = K.unionMeshes([mallaF, capa]); mallaF = u || K.mergeMeshes([mallaF, capa]); }
     parts.push(...conBoquilla('Malla delantera', mallaF, bq && bq.del));
     if (capas) capas.forEach((c, i) => { const m = and(c.m, dMask); if (K.count(m)) parts.push(LM('Malla delantera: color ' + (i + 1), mm(G, m, ancla, p.eMalla, dxF, dy), c.hex)); });
@@ -881,7 +889,7 @@ function gTermo(p) {
     if (two2) { if (K.count(pins)) parts.push(LM('Pivotes de cierre', mm(G, pins, p.eMalla, p.eMalla + 2, dxF, dy), p.colorMalla || C.rojo));
       /* la trasera es la misma figura en espejo: se voltea la malla 3D (exacto), no la máscara (el volteo de píxeles dejaba aristas sueltas) */
       const backU = sub(or(and(lat, flat), solid, base, oreja), boca, agujeros, agOreja, dilate(G, pins, 0.2));
-      const mB = K.maskToMesh(G, backU, 0, p.eMalla); for (let q = 0; q < mB.pos.length; q += 3) mB.pos[q] = -mB.pos[q]; K.fixOrientation(mB);
+      const mB = mmOk(backU, 0, p.eMalla, 0, 0); for (let q = 0; q < mB.pos.length; q += 3) mB.pos[q] = -mB.pos[q]; K.fixOrientation(mB);
       const back = K.translateMesh(mB, dxB, dy);
       parts.push(...conBoquilla('Malla trasera (en espejo)', back, bq && bq.tras)); }
     if (clip) { const yc = dy - G.H / 2 - 14; parts.push(LM('Pinza de cierre', K.solidMesh(K.keep(clipCierre(p.eMalla, 9).translate([6, yc, 0]))), C.rosa)); }
@@ -1413,6 +1421,7 @@ const TERMO = (o = {}) => [{ ...shp(o.forma || 'corazon', ['corazon', 'circulo',
   num('tam', 'Tamaño', o.tam || 70, 30, 150), sel('diseno', 'Diseño', o.diseno || 'texto', { texto: 'Texto', imagen: 'Imagen', copo: 'Copo de nieve', patron: 'Patrón', ninguno: 'Liso' }),
   area('texto', 'Texto', o.texto ?? 'Feliz\nNavidad', { show: p => p.diseno === 'texto' }), fnt('fuente', 'Fuente', o.fuente || 'pacifico', { show: p => p.diseno === 'texto' }),
   img('imgD', 'Imagen del diseño', 'silueta', { show: p => p.diseno === 'imagen' }),
+  num('tamDiseno', 'Tamaño del dibujo', 100, 50, 170, 5, { unit: '%', show: p => p.diseno !== 'ninguno' && p.diseno !== 'patron' && !(p.diseno === 'imagen' && p.formaImg) }),
   sel('colorImg', 'Imagen', 'color', { color: 'En color (detecta los colores)', byn: 'Blanco y negro (umbral)' }, { show: p => p.diseno === 'imagen' }),
   cnt('nColores', 'Número de colores', 4, 2, 8, { show: p => p.diseno === 'imagen' && p.colorImg !== 'byn' }),
   { ...UMB, show: p => p.diseno === 'imagen' && p.colorImg === 'byn' },
