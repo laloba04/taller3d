@@ -775,7 +775,7 @@ function gTermo(p) {
   else if (p.diseno === 'texto') { const f = font(p.fuente); const tx = lines(p.texto, 'Feliz Navidad'); const s = fitSize(tx, f, W * fit[0], Hs * fit[1] * 1.3, 1.05); D = F.text(tx, f, s, W * (fit[2] || 0), Hs * (fit[3] || 0), { lh: 1.05 }); }
   else if (p.diseno === 'imagen') { const s = imgFit(p.imgD, W * fit[0], Hs * fit[1] * 1.4); D = imgM(F, W * (fit[2] || 0), Hs * (fit[3] || 0), s.w, s.h); }
   else if (p.diseno === 'copo') D = K.snowflake(F, W * (fit[2] || 0), Hs * (fit[3] || 0), Math.min(W * fit[0], Hs * fit[1] * 1.4) * 0.5, 1.8, p.semilla);
-  else if (p.diseno === 'patron') D = F.pattern(p.patron, p.sep, 1.4, p.semilla);
+  else if (p.diseno === 'patron') D = F.pattern(p.patron, p.sep * kD, 1.4 * Math.sqrt(kD), p.semilla);
   D = and(D, erode(F, S, R * 0.6 + 1));
   const n = F.n, res = F.res, w = F.w, h = F.h;
   const tray = p.perfil === 'bandeja'; const run = H / Math.tan((p.angulo || 70) * Math.PI / 180);
@@ -1423,7 +1423,7 @@ const TERMO = (o = {}) => [{ ...shp(o.forma || 'corazon', ['corazon', 'circulo',
   num('tam', 'Tamaño', o.tam || 70, 30, 150), sel('diseno', 'Diseño', o.diseno || 'texto', { texto: 'Texto', imagen: 'Imagen', copo: 'Copo de nieve', patron: 'Patrón', ninguno: 'Liso' }),
   area('texto', 'Texto', o.texto ?? 'Feliz\nNavidad', { show: p => p.diseno === 'texto' }), fnt('fuente', 'Fuente', o.fuente || 'pacifico', { show: p => p.diseno === 'texto' }),
   img('imgD', 'Imagen del diseño', 'silueta', { show: p => p.diseno === 'imagen' }),
-  num('tamDiseno', 'Tamaño del dibujo', 100, 50, 170, 5, { unit: '%', show: p => p.diseno !== 'ninguno' && p.diseno !== 'patron' }),
+  num('tamDiseno', 'Tamaño del dibujo', 100, 50, 170, 5, { unit: '%', show: p => p.diseno !== 'ninguno' }),
   sel('colorImg', 'Imagen', 'color', { color: 'En color (detecta los colores)', byn: 'Blanco y negro (umbral)' }, { show: p => p.diseno === 'imagen' }),
   cnt('nColores', 'Número de colores', 4, 2, 8, { show: p => p.diseno === 'imagen' && p.colorImg !== 'byn' }),
   { ...UMB, show: p => p.diseno === 'imagen' && p.colorImg === 'byn' },
