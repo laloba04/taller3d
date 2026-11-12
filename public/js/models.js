@@ -710,7 +710,7 @@ function gTermo(p) {
   const silueta = (G) => { const im = G.image(p.imgD, 0, 0, si.w, si.h, { thr: p.umbral }); return { im, S: dilate(G, K.fillHoles(G, close(G, im, 1.5)), mg) }; };
   const t = p.eva, H = p.alto, R = Math.max(1, p.redondeo), E = (p.estilo || 'liso') === 'liso' ? 0 : p.relieveD, sign = p.estilo === 'hundido' ? -1 : 1;
   /* molde "plano" (como el vídeo): hembra = bandeja con escalón para el borde de la malla; macho = placa con la silueta */
-  const plano = (p.molde || 'plano') === 'plano', cierre = p.cierre || 'remaches';
+  const plano = (p.molde || 'plano') === 'plano', cierre = p.cierre || 'rosca';
   const remaches = p.malla && p.trasera !== 'no' && cierre === 'remaches';
   const pestana = remaches ? Math.max(p.pestana ?? 2, 7) : (p.pestana ?? 2);
   const escalon = pestana + 1, paredH = 4, padP = plano ? escalon + paredH : 0, guias = p.guias && !plano;
@@ -777,7 +777,7 @@ function gTermo(p) {
     const lat = G.pattern(p.rejilla, p.paso, p.hilo, 1); const rim = ring(G, flat, p.bordeMalla);
     let solid = rim;
     let pegC = null;
-    if (p.anilla !== false) { const fb = bbox(G, flat); const e = extreme(G, flat, 'top', fb.cx + fb.bw * 0.12, fb.cx + fb.bw * 0.32); const peg = G.rectC(e[0], e[1] - 2, 5, 9, 1.5); pegC = e; const pegHole = G.disk(e[0], e[1] - 4, 1.3); solid = or(solid, sub(peg, pegHole)); flat = or(flat, sub(peg, pegHole)); }
+    if (p.anilla) { const fb = bbox(G, flat); const e = extreme(G, flat, 'top', fb.cx + fb.bw * 0.12, fb.cx + fb.bw * 0.32); const peg = G.rectC(e[0], e[1] - 2, 5, 9, 1.5); pegC = e; const pegHole = G.disk(e[0], e[1] - 4, 1.3); solid = or(solid, sub(peg, pegHole)); flat = or(flat, sub(peg, pegHole)); }
     /* remaches: pastillas macizas con agujero repartidas por la pestaña plana (no arriba, donde va el colgador) */
     let agujeros = G.blank(); const ptsR = [];
     if (remaches) { const mid = erode(G, flat, pestana / 2); const fb = bbox(G, mid);
@@ -805,7 +805,7 @@ function gTermo(p) {
       const cr = cierreRosca(p.eMalla, p.holgRosca ?? 0.35); const y0 = -ny - 3;   /* coordenadas de malla: y hacia arriba; 3 mm metida en la base */
       const yc = dy - G.H / 2 - 14;
       bq = { del: K.solidMesh(K.keep(cr.delantera.translate([nx + dxF, y0 + dy, 0]))), tras: K.solidMesh(K.keep(cr.trasera.translate([-nx + dxB, y0 + dy, 0]))),
-        tapon: K.solidMesh(K.keep(cr.tapon.translate([-12, yc, 0]))), pinzas: K.solidMesh(K.union([K.keep(cr.pinza.translate([4, yc - 5, 0])), K.keep(cr.pinza.translate([18, yc - 5, 0]))])) };
+        tapon: K.solidMesh(K.keep(cr.tapon.translate([-12, yc, 0]))), pinzas: K.solidMesh(K.keep(cr.pinza.translate([4, yc - 5, 0]))) };
     }
     const conBoquilla = (nombre, malla, b) => { const u = b && K.unionMeshes([malla, b]); if (u) return [LM(nombre + ' (con boquilla)', u, p.colorMalla || C.rojo)];
       return b ? [LM(nombre, malla, p.colorMalla || C.rojo), LM('Boquilla de ' + nombre.toLowerCase(), b, p.colorMalla || C.rojo)] : [LM(nombre, malla, p.colorMalla || C.rojo)]; };
@@ -827,10 +827,10 @@ function gTermo(p) {
       parts.push(LM('Remaches: pines', K.solidMesh(fila(rm.pin, yc)), C.negro), LM('Remaches: tapitas', K.solidMesh(fila(rm.tapa, yc - sep)), C.negro)); }
     if (bq) {
       parts.push(LM('Tapón de rosca', bq.tapon, C.blanco));
-      parts.push(LM('Pinzas', bq.pinzas, C.blanco));
+      parts.push(LM('Clip', bq.pinzas, C.blanco));
     }
   }
-  return { layers: parts, note: (p.malla ? 'Imprime las mallas en plano. Calienta cada una (pistola de calor o agua muy caliente) y presiónala entre el macho y la hembra; la trasera sale en espejo, así que se pone en el molde dada la vuelta. ' + (remaches ? 'Junta las dos mallas por la pestaña haciendo coincidir los agujeros, mete las chuches, pasa un pin por cada agujero y presiona su tapita hasta que quede firme (si entra floja o no entra, cambia el ajuste del remache). Imprime los remaches a 0,12–0,16 mm. ' : rosca ? 'Junta las dos mallas por el borde: las medias boquillas forman una boquilla con rosca; mete las chuches por ella, enrosca el tapón (su aro sirve para colgarlo con una cinta) y sujeta los bordes con las pinzas. Imprime tapón y pinzas a 0,16 mm. ' : p.malla && p.trasera !== 'no' && p.cierre !== 'no' ? 'Después une las dos por el borde encajando los pivotes. ' : '') : '') + 'Calienta la lámina (EVA o goma) y présala entre el macho y la hembra dada la vuelta. El grosor de lámina ajusta la holgura.' + (guias ? ' Recorta la lámina para que no tape los cuatro pivotes de las esquinas.' : '') };
+  return { layers: parts, note: (p.malla ? 'Imprime las mallas en plano. Calienta cada una (pistola de calor o agua muy caliente) y presiónala entre el macho y la hembra; la trasera sale en espejo, así que se pone en el molde dada la vuelta. ' + (remaches ? 'Junta las dos mallas por la pestaña haciendo coincidir los agujeros, mete las chuches, pasa un pin por cada agujero y presiona su tapita hasta que quede firme (si entra floja o no entra, cambia el ajuste del remache). Imprime los remaches a 0,12–0,16 mm. ' : rosca ? 'Junta las dos mallas por el borde: las medias boquillas forman una boquilla con rosca; mete las chuches por ella, enrosca el tapón arriba (su aro sirve para colgarlo con una cinta) y pon el clip en el borde de abajo para que no se separen. Imprime tapón y clip a 0,16 mm. ' : p.malla && p.trasera !== 'no' && p.cierre !== 'no' ? 'Después une las dos por el borde encajando los pivotes. ' : '') : '') + 'Calienta la lámina (EVA o goma) y présala entre el macho y la hembra dada la vuelta. El grosor de lámina ajusta la holgura.' + (guias ? ' Recorta la lámina para que no tape los cuatro pivotes de las esquinas.' : '') };
 }
 
 
@@ -1359,8 +1359,8 @@ const TERMO = (o = {}) => [{ ...shp(o.forma || 'corazon', ['corazon', 'circulo',
   sel('molde', 'Tipo de molde', 'plano', { plano: 'Bandeja + placa con la forma', bloque: 'Bloque cuadrado' }), chk('guias', 'Guías de centrado en las esquinas', true, { show: p => p.molde === 'bloque' }),
   chk('malla', 'Incluir la figura de malla para imprimir', o.malla ?? true), sel('rejilla', 'Agujeros de la malla', 'cuadricula', { cuadricula: 'Cuadrados', rombos: 'Rombos', panal: 'Hexágonos', mosaico: 'Mosaico' }, { show: p => p.malla }),
   num('paso', 'Tamaño de agujero', 3.2, 2, 8, 0.2, { show: p => p.malla }), num('hilo', 'Grosor del hilo', 0.9, 0.5, 2, 0.1, { show: p => p.malla }), num('bordeMalla', 'Borde macizo', 2.5, 1, 6, 0.5, { show: p => p.malla }),
-  num('eMalla', 'Grosor de la malla', 0.8, 0.4, 2, 0.1, { show: p => p.malla }), num('pestana', 'Pestaña plana alrededor de la malla', 2, 0, 10, 0.5, { show: p => p.malla }), num('minDiseno', 'Grosor mínimo de las líneas del dibujo', 1.4, 0.8, 3, 0.1, { show: p => p.malla && p.diseno !== 'ninguno' }), sel('disenoMalla', 'Diseño en la malla', 'macizo', { macizo: 'Macizo (como bordado)', malla: 'Malla de otro color' }, { show: p => p.malla && p.diseno !== 'ninguno' }), chk('anilla', 'Pestaña para colgar', true, { show: p => p.malla }), sel('trasera', 'Malla trasera', o.trasera || 'si', { si: 'Sí', no: 'Solo la delantera' }, { show: p => p.malla }),
-  sel('cierre', 'Cierre', 'remaches', { remaches: 'Remaches a presión', rosca: 'Boquilla con tapón de rosca + pinzas', pivotes: 'Pivotes pequeños', no: 'Ninguno' }, { show: p => p.malla && p.trasera !== 'no' }),
+  num('eMalla', 'Grosor de la malla', 0.8, 0.4, 2, 0.1, { show: p => p.malla }), num('pestana', 'Pestaña plana alrededor de la malla', 2, 0, 10, 0.5, { show: p => p.malla }), num('minDiseno', 'Grosor mínimo de las líneas del dibujo', 1.4, 0.8, 3, 0.1, { show: p => p.malla && p.diseno !== 'ninguno' }), sel('disenoMalla', 'Diseño en la malla', 'macizo', { macizo: 'Macizo (como bordado)', malla: 'Malla de otro color' }, { show: p => p.malla && p.diseno !== 'ninguno' }), chk('anilla', 'Pestaña para colgar', false, { show: p => p.malla }), sel('trasera', 'Malla trasera', o.trasera || 'si', { si: 'Sí', no: 'Solo la delantera' }, { show: p => p.malla }),
+  sel('cierre', 'Cierre', 'rosca', { rosca: 'Rosca arriba + clip abajo', remaches: 'Remaches a presión', pivotes: 'Pivotes pequeños', no: 'Ninguno' }, { show: p => p.malla && p.trasera !== 'no' }),
   num('holgRem', 'Ajuste del remache (más = más suelto)', 0.1, 0, 0.3, 0.02, { show: p => p.malla && p.trasera !== 'no' && p.cierre === 'remaches' }),
   num('holgRosca', 'Holgura de la rosca', 0.35, 0.15, 0.8, 0.05, { show: p => p.malla && p.trasera !== 'no' && p.cierre === 'rosca' })];
 M('termo', 'Generador de termoformado', 'Cualquier forma, en cúpula acolchada o en bandeja, con texto, imagen o copo.', TERMO({ texto: 'Mamá', forma: 'corazon', eva: 1, anilla: true }), p => gTermo(p));
