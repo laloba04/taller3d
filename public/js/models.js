@@ -750,7 +750,8 @@ function capasColor(F, img, cx, cy, iw, ih, nCol) {
 function gTermo(p) {
   /* con diseño de imagen, la forma puede ser la silueta de la propia imagen (más un margen) */
   const sigue = p.diseno === 'imagen' && p.formaImg !== false && p.imgD, mg = p.margenImg ?? 3;
-  const si = sigue ? imgFit(p.imgD, p.tam, p.tam) : null;
+  /* con la forma de la silueta, el tamaño del dibujo agranda la imagen y la figura con ella */
+  const si = sigue ? imgFit(p.imgD, p.tam * (p.tamDiseno ?? 100) / 100, p.tam * (p.tamDiseno ?? 100) / 100) : null;
   const W = sigue ? si.w + 2 * mg : p.tam, Hs = sigue ? si.h + 2 * mg : (p.forma === 'cuadrado' || p.forma === 'circulo' || p.forma === 'flor') ? W : W * (p.forma === 'ovalo' ? 0.7 : 1);
   const enColor = p.diseno === 'imagen' && p.colorImg === 'color' && p.imgD;
   const imgM = (G, cx, cy, iw, ih) => enColor ? capasColor(G, p.imgD, cx, cy, iw, ih, p.nColores || 4).all : G.image(p.imgD, cx, cy, iw, ih, { thr: p.umbral });
@@ -1422,7 +1423,7 @@ const TERMO = (o = {}) => [{ ...shp(o.forma || 'corazon', ['corazon', 'circulo',
   num('tam', 'Tamaño', o.tam || 70, 30, 150), sel('diseno', 'Diseño', o.diseno || 'texto', { texto: 'Texto', imagen: 'Imagen', copo: 'Copo de nieve', patron: 'Patrón', ninguno: 'Liso' }),
   area('texto', 'Texto', o.texto ?? 'Feliz\nNavidad', { show: p => p.diseno === 'texto' }), fnt('fuente', 'Fuente', o.fuente || 'pacifico', { show: p => p.diseno === 'texto' }),
   img('imgD', 'Imagen del diseño', 'silueta', { show: p => p.diseno === 'imagen' }),
-  num('tamDiseno', 'Tamaño del dibujo', 100, 50, 170, 5, { unit: '%', show: p => p.diseno !== 'ninguno' && p.diseno !== 'patron' && !(p.diseno === 'imagen' && p.formaImg) }),
+  num('tamDiseno', 'Tamaño del dibujo', 100, 50, 170, 5, { unit: '%', show: p => p.diseno !== 'ninguno' && p.diseno !== 'patron' }),
   sel('colorImg', 'Imagen', 'color', { color: 'En color (detecta los colores)', byn: 'Blanco y negro (umbral)' }, { show: p => p.diseno === 'imagen' }),
   cnt('nColores', 'Número de colores', 4, 2, 8, { show: p => p.diseno === 'imagen' && p.colorImg !== 'byn' }),
   { ...UMB, show: p => p.diseno === 'imagen' && p.colorImg === 'byn' },
