@@ -691,6 +691,16 @@ function cierreRosca(eMalla, holg) {
   return { delantera, trasera, tapon, pinza, R, L, rb };
 }
 
+/* remache a presión para cerrar la bolsita: pin con cabeza + tapita en cúpula con agujero ciego (ajuste a presión) */
+const REM = { rc: 3.2, rs: 1.2, hc: 1.2 };
+function remache(eMalla, holg) {
+  const MF = K.mf(), k = K.keep, { rc, rs, hc } = REM; const Lp = 2 * eMalla + 2.2;
+  const pin = K.union([k(MF.Manifold.cylinder(hc, rc, rc, 40)), k(k(MF.Manifold.cylinder(Lp - 0.5, rs, rs, 28)).translate([0, 0, hc])), k(k(MF.Manifold.cylinder(0.5, rs, rs * 0.7, 28)).translate([0, 0, hc + Lp - 0.5]))]);
+  const domo = k(k(k(MF.Manifold.sphere(rc, 40)).scale([1, 1, 0.6])).intersect(k(k(MF.Manifold.cube([2 * rc + 2, 2 * rc + 2, rc + 1])).translate([-rc - 1, -rc - 1, 0]))));
+  const tapa = k(K.union([k(MF.Manifold.cylinder(hc, rc, rc, 40)), k(domo.translate([0, 0, hc]))]).subtract(k(k(MF.Manifold.cylinder(2.4, rs + holg, rs + holg, 28)).translate([0, 0, -0.01]))));
+  return { pin, tapa };
+}
+
 /* termoformado: molde macho (cúpula + diseño) y hembra en espejo con holgura para la lámina */
 function gTermo(p) {
   /* con diseño de imagen, la forma puede ser la silueta de la propia imagen (más un margen) */
@@ -699,7 +709,12 @@ function gTermo(p) {
   const W = sigue ? si.w + 2 * mg : p.tam, Hs = sigue ? si.h + 2 * mg : (p.forma === 'cuadrado' || p.forma === 'circulo' || p.forma === 'flor') ? W : W * (p.forma === 'ovalo' ? 0.7 : 1);
   const silueta = (G) => { const im = G.image(p.imgD, 0, 0, si.w, si.h, { thr: p.umbral }); return { im, S: dilate(G, K.fillHoles(G, close(G, im, 1.5)), mg) }; };
   const t = p.eva, H = p.alto, R = Math.max(1, p.redondeo), E = p.relieveD, sign = p.estilo === 'hundido' ? -1 : 1;
-  const F = frame(W + 2 * t + 4, Hs + 2 * t + 4, { margin: p.guias ? 13 : 5, maxPx: Math.min(340, K.QUALITY.maxPx), res: Math.min(4, K.QUALITY.res) });
+  /* molde "plano" (como el vídeo): hembra = bandeja con escalón para el borde de la malla; macho = placa con la silueta */
+  const plano = (p.molde || 'plano') === 'plano', cierre = p.cierre || 'remaches';
+  const remaches = p.malla && p.trasera !== 'no' && cierre === 'remaches';
+  const pestana = remaches ? Math.max(p.pestana ?? 2, 7) : (p.pestana ?? 2);
+  const escalon = pestana + 1, paredH = 4, padP = plano ? escalon + paredH : 0, guias = p.guias && !plano;
+  const F = frame(W + 2 * t + 4 + 2 * padP, Hs + 2 * t + 4 + 2 * padP, { margin: guias ? 13 : 5, maxPx: Math.min(340, K.QUALITY.maxPx), res: Math.min(4, K.QUALITY.res) });
   let S;
   if (sigue) S = silueta(F).S;
   else S = F.shape(p.forma, 0, 0, W, Hs);
@@ -720,17 +735,18 @@ function gTermo(p) {
   /* tela que sobra al cubrir el borde: lo que mide la curva (o la pared) menos lo que ocupa en plano, más una pestaña plana */
   const ang = (p.angulo || 70) * Math.PI / 180, ea = Math.max(1, Math.min(R, Math.min(W, Hs) / 2));
   const curva = tray ? H / Math.sin(ang) - H / Math.tan(ang) : Math.PI / 4 * (3 * (ea + H) - Math.sqrt((3 * ea + H) * (ea + 3 * H))) - ea;
-  const extra = Math.max(1, curva) + (p.pestana ?? 2);
+  const extra = Math.max(1, curva) + pestana;
   /* boquilla de rosca: en lo alto de la figura, en el borde de la malla */
-  const rosca = p.malla && p.trasera !== 'no' && p.cierre !== 'pivotes' && p.cierre !== 'no' && K.hasCSG();
+  const rosca = p.malla && p.trasera !== 'no' && cierre === 'rosca' && K.hasCSG();
   const bS = bbox(F, S), cuelloXY = rosca ? [bS.cx, extreme(F, dilate(F, S, extra), 'top', bS.cx - 1, bS.cx + 1)[1]] : [0, 0];
   const male = new Float32Array(n); for (let i = 0; i < n; i++) male[i] = base + Math.max(0, hm[i] + sign * em[i]);
   let pins = null; const pinH = t + 3;
-  if (p.guias) { pins = F.blank(); const px = F.W / 2 - 6.5, py = F.H / 2 - 6.5; for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) pins = or(pins, F.disk(sx * px, sy * py, 3)); for (let i = 0; i < n; i++) if (pins[i]) male[i] = base + pinH; }
+  if (guias) { pins = F.blank(); const px = F.W / 2 - 6.5, py = F.H / 2 - 6.5; for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) pins = or(pins, F.disk(sx * px, sy * py, 3)); for (let i = 0; i < n; i++) if (pins[i]) male[i] = base + pinH; }
   const parts = []; const step = 1 / res; const off = F.W / 2 + 4;
   const mesh = (arr, dx) => { const m = K.heightMesh(arr, w, h, step); for (let k = 0; k < m.pos.length; k += 3) m.pos[k] += dx; K.fixOrientation(m); return m; };
   const two = p.piezas === 'ambas';
-  parts.push(LM('Molde macho', mesh(male, two ? -off : 0), C.azul));
+  const off2 = plano ? F.W / 2 + 2 : off;
+  parts.push(LM('Molde macho', plano ? K.translateMesh(K.maskHeightMesh(F, S, k => male[k], 0), two ? -off2 : 0, 0) : mesh(male, two ? -off : 0), C.azul));
   if (two) {
     const St = dilate(F, S, t); const ht = tray ? dome(St, R + t, t * 0.4) : dome(St, R + t); const Dt = sign > 0 ? dilate(F, D, t * 0.5) : erode(F, D, Math.min(t * 0.5, 0.4)); const et = emb(Dt);
     const Hb = Math.max(base + H + E + 3, pinH + 4); const fem = new Float32Array(n);
@@ -739,7 +755,11 @@ function gTermo(p) {
     /* canal en la hembra para que no aplaste la boquilla al prensar la malla (en espejo, como la hembra) */
     if (rosca) { const c = F.rect(-cuelloXY[0] - ROSCA.R - 1, cuelloXY[1] - ROSCA.L - 30, -cuelloXY[0] + ROSCA.R + 1, cuelloXY[1] + 3, 1);
       for (let i = 0; i < n; i++) if (c[i]) fem[i] = Math.max(1.2, Math.min(fem[i], Hb - ROSCA.R - 1)); }
-    parts.push(LM('Molde hembra (en espejo)', mesh(fem, off), C.rosa));
+    if (plano) { /* escalón del grosor de la malla donde apoya su borde plano, y pared alrededor siguiendo la forma */
+      const esc = K.mirrorTo(F, sub(dilate(F, St, escalon), St), 0, 0), fuera = K.mirrorTo(F, dilate(F, St, escalon + paredH), 0, 0);
+      for (let i = 0; i < n; i++) if (esc[i]) fem[i] = Math.max(1.2, Math.min(fem[i], Hb - (p.malla ? p.eMalla : t)));
+      parts.push(LM('Molde hembra (en espejo)', K.translateMesh(K.maskHeightMesh(F, fuera, k => fem[k], 0), off2, 0), C.rosa)); }
+    else parts.push(LM('Molde hembra (en espejo)', mesh(fem, off), C.rosa));
   }
   if (p.malla) {
     const G = frame(W + 2 * extra + 6, Hs + 2 * extra + 6, { margin: 4, maxPx: Math.min(900, K.QUALITY.maxPx), res: Math.min(4, K.QUALITY.res) });
@@ -753,11 +773,23 @@ function gTermo(p) {
     D2 = and(D2, erode(G, flat, p.bordeMalla + 1));
     const lat = G.pattern(p.rejilla, p.paso, p.hilo, 1); const rim = ring(G, flat, p.bordeMalla);
     let solid = rim;
-    if (p.anilla) { const fb = bbox(G, flat); const e = extreme(G, flat, 'top', fb.cx + fb.bw * 0.12, fb.cx + fb.bw * 0.32); const peg = G.rectC(e[0], e[1] - 2, 5, 9, 1.5); const pegHole = G.disk(e[0], e[1] - 4, 1.3); solid = or(solid, sub(peg, pegHole)); flat = or(flat, sub(peg, pegHole)); }
+    let pegC = null;
+    if (p.anilla !== false) { const fb = bbox(G, flat); const e = extreme(G, flat, 'top', fb.cx + fb.bw * 0.12, fb.cx + fb.bw * 0.32); const peg = G.rectC(e[0], e[1] - 2, 5, 9, 1.5); pegC = e; const pegHole = G.disk(e[0], e[1] - 4, 1.3); solid = or(solid, sub(peg, pegHole)); flat = or(flat, sub(peg, pegHole)); }
+    /* remaches: pastillas macizas con agujero repartidas por la pestaña plana (no arriba, donde va el colgador) */
+    let agujeros = G.blank(); const ptsR = [];
+    if (remaches) { const mid = erode(G, flat, pestana / 2); const fb = bbox(G, mid);
+      const dentro = (x, y) => { const i = Math.floor(x * G.res + G.w / 2), j = Math.floor(y * G.res + G.h / 2); return i >= 0 && j >= 0 && i < G.w && j < G.h && mid[j * G.w + i]; };
+      let per = 0; const rg = ring(G, mid, 1); for (let i = 0; i < G.n; i++) per += rg[i]; per /= G.res * G.res;
+      const nR = Math.max(4, Math.min(12, Math.round(per / 40))); const Rmax = Math.hypot(fb.bw, fb.bh);
+      for (let k2 = 0; k2 < nR; k2++) { const a = -Math.PI / 2 + (k2 + 0.5) * 2 * Math.PI / nR; let last = null;
+        for (let r = 0; r < Rmax; r += 0.25) { const x = fb.cx + r * Math.cos(a), y = fb.cy + r * Math.sin(a); if (dentro(x, y)) last = [x, y]; }
+        if (last && !(pegC && Math.hypot(last[0] - pegC[0], last[1] - pegC[1]) < 9)) ptsR.push(last); }
+      for (const q of ptsR) { solid = or(solid, G.disk(q[0], q[1], REM.rc + 0.2)); agujeros = or(agujeros, G.disk(q[0], q[1], REM.rs + 0.25)); }
+      solid = and(sub(solid, agujeros), flat); }
     const dsg = p.disenoMalla === 'macizo' ? D2 : or(and(lat, D2), ring(G, D2, 0.6));
-    const body = sub(or(and(lat, flat), solid), D2); const two2 = p.trasera !== 'no'; const dy = -(F.H / 2 + G.H / 2 + 2), dxF = two2 ? -(G.W / 2 + 2) : 0, dxB = G.W / 2 + 2;
+    const body = sub(or(and(lat, flat), solid), D2, agujeros); const two2 = p.trasera !== 'no'; const dy = -(F.H / 2 + G.H / 2 + 2), dxF = two2 ? -(G.W / 2 + 2) : 0, dxB = G.W / 2 + 2;
     let pins = G.blank();
-    if (two2 && !rosca && p.cierre !== 'no') { const mid = erode(G, flat, p.bordeMalla / 2); const fb = bbox(G, mid); const pts = [extreme(G, mid, 'left'), extreme(G, mid, 'right'), extreme(G, mid, 'bottom'), extreme(G, mid, 'top', fb.x0, fb.cx - fb.bw * 0.1)];
+    if (two2 && cierre === 'pivotes') { const mid = erode(G, flat, p.bordeMalla / 2); const fb = bbox(G, mid); const pts = [extreme(G, mid, 'left'), extreme(G, mid, 'right'), extreme(G, mid, 'bottom'), extreme(G, mid, 'top', fb.x0, fb.cx - fb.bw * 0.1)];
       for (const q of pts) pins = or(pins, G.disk(q[0], q[1], 0.85)); }
     /* boca de la boquilla: paso abierto en el borde para meter las chuches */
     let boca = G.blank(); const nx = cuelloXY[0], ny = extreme(G, flat, 'top', cuelloXY[0] - 1, cuelloXY[0] + 1)[1];
@@ -777,14 +809,20 @@ function gTermo(p) {
     parts.push(...conBoquilla('Malla delantera', mm(G, sub(or(body, base), boca), 0, p.eMalla, dxF, dy), bq && bq.del));
     if (K.count(D2)) parts.push(LM('Malla delantera: diseño', mm(G, sub(dsg, solid), 0, p.eMalla, dxF, dy), C.blanco));
     if (two2) { if (K.count(pins)) parts.push(LM('Pivotes de cierre', mm(G, pins, p.eMalla, p.eMalla + 2, dxF, dy), p.colorMalla || C.rojo));
-      const back = sub(K.mirrorTo(G, sub(or(and(lat, flat), solid, base), boca), 0, 0), K.mirrorTo(G, dilate(G, pins, 0.2), 0, 0));
-      parts.push(...conBoquilla('Malla trasera (en espejo)', mm(G, back, 0, p.eMalla, dxB, dy), bq && bq.tras)); }
+      /* la trasera es la misma figura en espejo: se voltea la malla 3D (exacto), no la máscara (el volteo de píxeles dejaba aristas sueltas) */
+      const backU = sub(or(and(lat, flat), solid, base), boca, agujeros, dilate(G, pins, 0.2));
+      const mB = K.maskToMesh(G, backU, 0, p.eMalla); for (let q = 0; q < mB.pos.length; q += 3) mB.pos[q] = -mB.pos[q]; K.fixOrientation(mB);
+      const back = K.translateMesh(mB, dxB, dy);
+      parts.push(...conBoquilla('Malla trasera (en espejo)', back, bq && bq.tras)); }
+    if (remaches && ptsR.length && K.hasCSG()) { const rm = remache(p.eMalla, p.holgRem ?? 0.1); const yc = dy - G.H / 2 - 6, sep = 2 * REM.rc + 3, x0 = -(ptsR.length - 1) * sep / 2;
+      const fila = (s3, y) => K.union(ptsR.map((_, i) => K.keep(s3.translate([x0 + i * sep, y, 0]))));
+      parts.push(LM('Remaches: pines', K.solidMesh(fila(rm.pin, yc)), C.negro), LM('Remaches: tapitas', K.solidMesh(fila(rm.tapa, yc - sep)), C.negro)); }
     if (bq) {
       parts.push(LM('Tapón de rosca', bq.tapon, C.blanco));
       parts.push(LM('Pinzas', bq.pinzas, C.blanco));
     }
   }
-  return { layers: parts, note: (p.malla ? 'Imprime las mallas en plano. Calienta cada una (pistola de calor o agua muy caliente) y presiónala entre el macho y la hembra; la trasera sale en espejo, así que se pone en el molde dada la vuelta. ' + (rosca ? 'Junta las dos mallas por el borde: las medias boquillas forman una boquilla con rosca; mete las chuches por ella, enrosca el tapón (su aro sirve para colgarlo con una cinta) y sujeta los bordes con las pinzas. Imprime tapón y pinzas a 0,16 mm. ' : p.malla && p.trasera !== 'no' && p.cierre !== 'no' ? 'Después une las dos por el borde encajando los pivotes. ' : '') : '') + 'Calienta la lámina (EVA o goma) y présala entre el macho y la hembra dada la vuelta. El grosor de lámina ajusta la holgura.' + (p.guias ? ' Recorta la lámina para que no tape los cuatro pivotes de las esquinas.' : '') };
+  return { layers: parts, note: (p.malla ? 'Imprime las mallas en plano. Calienta cada una (pistola de calor o agua muy caliente) y presiónala entre el macho y la hembra; la trasera sale en espejo, así que se pone en el molde dada la vuelta. ' + (remaches ? 'Junta las dos mallas por la pestaña haciendo coincidir los agujeros, mete las chuches, pasa un pin por cada agujero y presiona su tapita hasta que quede firme (si entra floja o no entra, cambia el ajuste del remache). Imprime los remaches a 0,12–0,16 mm. ' : rosca ? 'Junta las dos mallas por el borde: las medias boquillas forman una boquilla con rosca; mete las chuches por ella, enrosca el tapón (su aro sirve para colgarlo con una cinta) y sujeta los bordes con las pinzas. Imprime tapón y pinzas a 0,16 mm. ' : p.malla && p.trasera !== 'no' && p.cierre !== 'no' ? 'Después une las dos por el borde encajando los pivotes. ' : '') : '') + 'Calienta la lámina (EVA o goma) y présala entre el macho y la hembra dada la vuelta. El grosor de lámina ajusta la holgura.' + (guias ? ' Recorta la lámina para que no tape los cuatro pivotes de las esquinas.' : '') };
 }
 
 
@@ -1309,11 +1347,13 @@ const TERMO = (o = {}) => [{ ...shp(o.forma || 'corazon', ['corazon', 'circulo',
   { ...pat('rombos', 'patron', 'Patrón'), show: p => p.diseno === 'patron' }, num('sep', 'Separación del patrón', 6, 3, 15, 0.5, { show: p => p.diseno === 'patron' }), cnt('semilla', 'Variante', 3, 1, 50, { show: p => p.diseno === 'copo' || p.diseno === 'patron' }),
   sel('estilo', 'Diseño en el molde', 'relieve', { relieve: 'En relieve', hundido: 'Hundido' }),
   num('alto', 'Altura', o.alto || 8, 2, 40), num('redondeo', 'Redondeo del borde', 7, 1, 25, 0.5, { show: p => p.perfil !== 'bandeja' }), num('relieveD', 'Profundidad del diseño', 1.2, 0.4, 3, 0.1),
-  num('eva', 'Holgura entre moldes (grosor de la malla o lámina)', o.eva || 2, 0.5, 6, 0.1), num('base', 'Grosor de la base', 3, 2, 8, 0.5), sel('piezas', 'Piezas', 'ambas', { ambas: 'Macho + hembra', macho: 'Solo macho' }), chk('guias', 'Guías de centrado en las esquinas', true),
+  num('eva', 'Holgura entre moldes (grosor de la malla o lámina)', o.eva || 2, 0.5, 6, 0.1), num('base', 'Grosor de la base', 3, 2, 8, 0.5), sel('piezas', 'Piezas', 'ambas', { ambas: 'Macho + hembra', macho: 'Solo macho' }),
+  sel('molde', 'Tipo de molde', 'plano', { plano: 'Bandeja + placa con la forma', bloque: 'Bloque cuadrado' }), chk('guias', 'Guías de centrado en las esquinas', true, { show: p => p.molde === 'bloque' }),
   chk('malla', 'Incluir la figura de malla para imprimir', o.malla ?? true), sel('rejilla', 'Agujeros de la malla', 'cuadricula', { cuadricula: 'Cuadrados', rombos: 'Rombos', panal: 'Hexágonos', mosaico: 'Mosaico' }, { show: p => p.malla }),
   num('paso', 'Tamaño de agujero', 3.2, 2, 8, 0.2, { show: p => p.malla }), num('hilo', 'Grosor del hilo', 0.9, 0.5, 2, 0.1, { show: p => p.malla }), num('bordeMalla', 'Borde macizo', 2.5, 1, 6, 0.5, { show: p => p.malla }),
-  num('eMalla', 'Grosor de la malla', 0.8, 0.4, 2, 0.1, { show: p => p.malla }), num('pestana', 'Pestaña plana alrededor de la malla', 2, 0, 10, 0.5, { show: p => p.malla }), sel('disenoMalla', 'Diseño en la malla', 'macizo', { macizo: 'Macizo (como bordado)', malla: 'Malla de otro color' }, { show: p => p.malla && p.diseno !== 'ninguno' }), chk('anilla', 'Pitorro para colgar', false, { show: p => p.malla }), sel('trasera', 'Malla trasera', o.trasera || 'si', { si: 'Sí', no: 'Solo la delantera' }, { show: p => p.malla }),
-  sel('cierre', 'Cierre', 'rosca', { rosca: 'Boquilla con tapón de rosca + pinzas', pivotes: 'Pivotes pequeños', no: 'Ninguno' }, { show: p => p.malla && p.trasera !== 'no' }),
+  num('eMalla', 'Grosor de la malla', 0.8, 0.4, 2, 0.1, { show: p => p.malla }), num('pestana', 'Pestaña plana alrededor de la malla', 2, 0, 10, 0.5, { show: p => p.malla }), sel('disenoMalla', 'Diseño en la malla', 'macizo', { macizo: 'Macizo (como bordado)', malla: 'Malla de otro color' }, { show: p => p.malla && p.diseno !== 'ninguno' }), chk('anilla', 'Pestaña para colgar', true, { show: p => p.malla }), sel('trasera', 'Malla trasera', o.trasera || 'si', { si: 'Sí', no: 'Solo la delantera' }, { show: p => p.malla }),
+  sel('cierre', 'Cierre', 'remaches', { remaches: 'Remaches a presión', rosca: 'Boquilla con tapón de rosca + pinzas', pivotes: 'Pivotes pequeños', no: 'Ninguno' }, { show: p => p.malla && p.trasera !== 'no' }),
+  num('holgRem', 'Ajuste del remache (más = más suelto)', 0.1, 0, 0.3, 0.02, { show: p => p.malla && p.trasera !== 'no' && p.cierre === 'remaches' }),
   num('holgRosca', 'Holgura de la rosca', 0.35, 0.15, 0.8, 0.05, { show: p => p.malla && p.trasera !== 'no' && p.cierre === 'rosca' })];
 M('termo', 'Generador de termoformado', 'Cualquier forma, en cúpula acolchada o en bandeja, con texto, imagen o copo.', TERMO({ texto: 'Mamá', forma: 'corazon', eva: 1, anilla: true }), p => gTermo(p));
 M('termo-nav', 'Molde de termoformado navideño', 'Bolsita de malla de dos caras con mensaje de Navidad, y sus moldes.', TERMO({ texto: 'Feliz\nNavidad', forma: 'corazon', eva: 1, anilla: true }), p => gTermo(p));
