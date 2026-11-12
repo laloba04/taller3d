@@ -749,7 +749,7 @@ function capasColor(F, img, cx, cy, iw, ih, nCol) {
 /* termoformado: molde macho (cúpula + diseño) y hembra en espejo con holgura para la lámina */
 function gTermo(p) {
   /* con diseño de imagen, la forma puede ser la silueta de la propia imagen (más un margen) */
-  const sigue = p.diseno === 'imagen' && p.formaImg !== false && p.imgD, mg = p.margenImg || 6;
+  const sigue = p.diseno === 'imagen' && p.formaImg !== false && p.imgD, mg = p.margenImg ?? 3;
   const si = sigue ? imgFit(p.imgD, p.tam, p.tam) : null;
   const W = sigue ? si.w + 2 * mg : p.tam, Hs = sigue ? si.h + 2 * mg : (p.forma === 'cuadrado' || p.forma === 'circulo' || p.forma === 'flor') ? W : W * (p.forma === 'ovalo' ? 0.7 : 1);
   const enColor = p.diseno === 'imagen' && p.colorImg === 'color' && p.imgD;
@@ -761,7 +761,7 @@ function gTermo(p) {
   const remaches = p.malla && p.trasera !== 'no' && cierre === 'remaches';
   /* los remaches y la ranura del clip tienen que caer en la pestaña plana (no en la curva): pestaña más ancha */
   const conClip = p.malla && p.trasera !== 'no' && cierre === 'rosca';
-  const pestana = remaches || conClip ? Math.max(p.pestana ?? 2, remaches ? 7 : 9) : (p.pestana ?? 2);
+  const pestana = remaches ? Math.max(p.pestana ?? 2, 7) : (p.pestana ?? 2);   /* la ranura del clip va en una orejita propia, no ensancha todo el borde */
   const escalon = pestana + 1, paredH = 4, padP = plano ? escalon + paredH : 0, guias = p.guias && !plano;
   const F = frame(W + 2 * t + 4 + 2 * padP, Hs + 2 * t + 4 + 2 * padP, { margin: guias ? 13 : 5, maxPx: Math.min(340, K.QUALITY.maxPx), res: Math.min(4, K.QUALITY.res) });
   let S;
@@ -811,7 +811,7 @@ function gTermo(p) {
     else parts.push(LM('Molde hembra (en espejo)', mesh(fem, off), C.rosa));
   }
   if (p.malla) {
-    const G = frame(W + 2 * extra + 6, Hs + 2 * extra + 6, { margin: 4, maxPx: Math.min(900, K.QUALITY.maxPx), res: Math.min(4, K.QUALITY.res) });
+    const G = frame(W + 2 * extra + 6, Hs + 2 * extra + 6 + (conClip ? 16 : 0), { margin: 4, maxPx: Math.min(900, K.QUALITY.maxPx), res: Math.min(4, K.QUALITY.res) });
     const sg = sigue ? silueta(G) : null;
     let S2 = sigue ? sg.S : G.shape(p.forma, 0, 0, W, Hs); let flat = K.close(G, dilate(G, S2, extra), Math.min(3, extra));
     let D2 = G.blank(); const ff = FIT[p.forma] || [.6, .45];
@@ -870,10 +870,9 @@ function gTermo(p) {
        el clip atraviesa las dos ranuras y se engancha (como en el vídeo) */
     let oreja = G.blank(), agOreja = G.blank(), clip = false, dClip = 5;
     if (rosca && two2) { const fb = bbox(G, flat); const [xb, yb] = extreme(G, flat, 'bottom', fb.cx - 1.5, fb.cx + 1.5);
-      /* la ranura sube hasta donde la malla mide al menos 11 mm de ancho (en puntas estrechas, como la del corazón) */
-      const enF = (x, y) => { const i = Math.floor(x * G.res + G.w / 2), j = Math.floor(y * G.res + G.h / 2); return i >= 0 && j >= 0 && i < G.w && j < G.h && flat[j * G.w + i]; };
-      let d = 5; while (d < 20 && !(enF(xb - 5.5, yb - d) && enF(xb + 5.5, yb - d))) d += 0.5;
-      dClip = d; agOreja = G.rect(xb - 3.1, yb - d - 1, xb + 3.1, yb - d + 1, 0.3); oreja = and(G.disk(xb, yb - d, 6.5), flat); clip = true; }
+      /* orejita redonda que sale del borde de abajo con la ranura dentro: así el resto de la malla no necesita pestaña ancha */
+      const yo = yb + 1.5; dClip = 0; agOreja = G.rect(xb - 3.1, yo - 1, xb + 3.1, yo + 1, 0.3);
+      oreja = or(G.disk(xb, yo, 5.5), and(G.rect(xb - 5.5, yb - 5, xb + 5.5, yo, 1.5), dilate(G, flat, 0.3))); clip = true; }
     let mallaF = mm(G, sub(or(body, base, oreja), boca, agOreja), 0, p.eMalla, dxF, dy);
     if (ancla) { const capa = mm(G, dMask, 0, ancla, dxF, dy); const u = K.unionMeshes([mallaF, capa]); mallaF = u || K.mergeMeshes([mallaF, capa]); }
     parts.push(...conBoquilla('Malla delantera', mallaF, bq && bq.del));
@@ -885,7 +884,7 @@ function gTermo(p) {
       const mB = K.maskToMesh(G, backU, 0, p.eMalla); for (let q = 0; q < mB.pos.length; q += 3) mB.pos[q] = -mB.pos[q]; K.fixOrientation(mB);
       const back = K.translateMesh(mB, dxB, dy);
       parts.push(...conBoquilla('Malla trasera (en espejo)', back, bq && bq.tras)); }
-    if (clip) { const yc = dy - G.H / 2 - 14; parts.push(LM('Pinza de cierre', K.solidMesh(K.keep(clipCierre(p.eMalla, dClip + 4).translate([6, yc, 0]))), C.rosa)); }
+    if (clip) { const yc = dy - G.H / 2 - 14; parts.push(LM('Pinza de cierre', K.solidMesh(K.keep(clipCierre(p.eMalla, 9).translate([6, yc, 0]))), C.rosa)); }
     if (remaches && ptsR.length && K.hasCSG()) { const rm = remache(p.eMalla, p.holgRem ?? 0.1); const yc = dy - G.H / 2 - 6, sep = 2 * REM.rc + 3, x0 = -(ptsR.length - 1) * sep / 2;
       const fila = (s3, y) => K.union(ptsR.map((_, i) => K.keep(s3.translate([x0 + i * sep, y, 0]))));
       parts.push(LM('Remaches: pines', K.solidMesh(fila(rm.pin, yc)), C.negro), LM('Remaches: tapitas', K.solidMesh(fila(rm.tapa, yc - sep)), C.negro)); }
@@ -1417,7 +1416,7 @@ const TERMO = (o = {}) => [{ ...shp(o.forma || 'corazon', ['corazon', 'circulo',
   sel('colorImg', 'Imagen', 'color', { color: 'En color (detecta los colores)', byn: 'Blanco y negro (umbral)' }, { show: p => p.diseno === 'imagen' }),
   cnt('nColores', 'Número de colores', 4, 2, 8, { show: p => p.diseno === 'imagen' && p.colorImg !== 'byn' }),
   { ...UMB, show: p => p.diseno === 'imagen' && p.colorImg === 'byn' },
-  chk('formaImg', 'La forma sigue la silueta de la imagen', true, { show: p => p.diseno === 'imagen' }), num('margenImg', 'Margen alrededor de la imagen', 6, 2, 15, 0.5, { show: p => p.diseno === 'imagen' && p.formaImg }),
+  chk('formaImg', 'La forma sigue la silueta de la imagen', true, { show: p => p.diseno === 'imagen' }), num('margenImg', 'Margen alrededor de la imagen', 3, 1, 15, 0.5, { show: p => p.diseno === 'imagen' && p.formaImg }),
   { ...pat('rombos', 'patron', 'Patrón'), show: p => p.diseno === 'patron' }, num('sep', 'Separación del patrón', 6, 3, 15, 0.5, { show: p => p.diseno === 'patron' }), cnt('semilla', 'Variante', 3, 1, 50, { show: p => p.diseno === 'copo' || p.diseno === 'patron' }),
   sel('estilo', 'Diseño en el molde', 'liso', { liso: 'Liso (sin dibujo, como el vídeo)', relieve: 'En relieve', hundido: 'Hundido' }),
   num('alto', 'Altura (profundidad de cada mitad)', o.alto || 12, 2, 40), num('redondeo', 'Redondeo del borde', 7, 1, 25, 0.5, { show: p => p.perfil !== 'bandeja' }), num('relieveD', 'Profundidad del diseño', 1.2, 0.4, 3, 0.1, { show: p => p.estilo !== 'liso' }),
