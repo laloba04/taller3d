@@ -707,8 +707,8 @@ function remache(eMalla, holg) {
 /* clip de cierre tipo pinza de pelo: el puente va metido en las ranuras de las dos mallas, las patas bajan una por cada cara
    hasta pasar el borde y allí la pata de delante engancha la de detrás. Se cierra apretando con el alicate (el gancho salta y hace clic)
    y se abre empujando el gancho hacia fuera. Se imprime ya cerrado, tumbado (alto = ancho de la pinza), con 0,3 mm de holgura en el gancho. */
-function clipCierre(eMalla) {
-  const MF = K.mf(), k = K.keep; const w = 1.0, g = 2 * eMalla + 0.2, L = 9, an = 5;
+function clipCierre(eMalla, L = 9) {
+  const MF = K.mf(), k = K.keep; const w = 1.0, g = 2 * eMalla + 0.2, an = 5;
   const r = (x0, y0, x1, y1) => k(k(MF.CrossSection.square([x1 - x0, y1 - y0])).translate([x0, y0]));
   const hb = -w - 0.9;
   const una = k(new MF.CrossSection([[[L + 0.41, -w - 0.3], [L - 0.4, -w - 0.3], [L + 0.41, hb]]]));
@@ -831,9 +831,12 @@ function gTermo(p) {
     const dMask = sub(dsg, solid), ancla = K.count(D2) ? Math.min(0.24, p.eMalla / 3) : 0;
     /* cierre de abajo (con la rosca): en las dos mallas, una zona maciza en el borde con una ranura en el mismo sitio;
        el clip atraviesa las dos ranuras y se engancha (como en el vídeo) */
-    let oreja = G.blank(), agOreja = G.blank(), clip = false;
+    let oreja = G.blank(), agOreja = G.blank(), clip = false, dClip = 5;
     if (rosca && two2) { const fb = bbox(G, flat); const [xb, yb] = extreme(G, flat, 'bottom', fb.cx - 1.5, fb.cx + 1.5);
-      oreja = and(G.rect(xb - 7, yb - 9, xb + 7, yb + 1, 1.5), flat); agOreja = G.rect(xb - 3.1, yb - 5 - 1, xb + 3.1, yb - 5 + 1, 0.3); clip = true; }
+      /* la ranura sube hasta donde la malla mide al menos 11 mm de ancho (en puntas estrechas, como la del corazón) */
+      const enF = (x, y) => { const i = Math.floor(x * G.res + G.w / 2), j = Math.floor(y * G.res + G.h / 2); return i >= 0 && j >= 0 && i < G.w && j < G.h && flat[j * G.w + i]; };
+      let d = 5; while (d < 20 && !(enF(xb - 5.5, yb - d) && enF(xb + 5.5, yb - d))) d += 0.5;
+      dClip = d; agOreja = G.rect(xb - 3.1, yb - d - 1, xb + 3.1, yb - d + 1, 0.3); oreja = and(G.disk(xb, yb - d, 6.5), flat); clip = true; }
     let mallaF = mm(G, sub(or(body, base, oreja), boca, agOreja), 0, p.eMalla, dxF, dy);
     if (ancla) { const capa = mm(G, dMask, 0, ancla, dxF, dy); const u = K.unionMeshes([mallaF, capa]); mallaF = u || K.mergeMeshes([mallaF, capa]); }
     parts.push(...conBoquilla('Malla delantera', mallaF, bq && bq.del));
@@ -844,7 +847,7 @@ function gTermo(p) {
       const mB = K.maskToMesh(G, backU, 0, p.eMalla); for (let q = 0; q < mB.pos.length; q += 3) mB.pos[q] = -mB.pos[q]; K.fixOrientation(mB);
       const back = K.translateMesh(mB, dxB, dy);
       parts.push(...conBoquilla('Malla trasera (en espejo)', back, bq && bq.tras)); }
-    if (clip) { const yc = dy - G.H / 2 - 14; parts.push(LM('Pinza de cierre', K.solidMesh(K.keep(clipCierre(p.eMalla).translate([6, yc, 0]))), C.rosa)); }
+    if (clip) { const yc = dy - G.H / 2 - 14; parts.push(LM('Pinza de cierre', K.solidMesh(K.keep(clipCierre(p.eMalla, dClip + 4).translate([6, yc, 0]))), C.rosa)); }
     if (remaches && ptsR.length && K.hasCSG()) { const rm = remache(p.eMalla, p.holgRem ?? 0.1); const yc = dy - G.H / 2 - 6, sep = 2 * REM.rc + 3, x0 = -(ptsR.length - 1) * sep / 2;
       const fila = (s3, y) => K.union(ptsR.map((_, i) => K.keep(s3.translate([x0 + i * sep, y, 0]))));
       parts.push(LM('Remaches: pines', K.solidMesh(fila(rm.pin, yc)), C.negro), LM('Remaches: tapitas', K.solidMesh(fila(rm.tapa, yc - sep)), C.negro)); }
