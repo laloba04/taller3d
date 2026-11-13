@@ -798,7 +798,7 @@ function gTermo(p) {
   const mesh = (arr, dx) => { const m = K.heightMesh(arr, w, h, step); for (let k = 0; k < m.pos.length; k += 3) m.pos[k] += dx; K.fixOrientation(m); return m; };
   const two = p.piezas === 'ambas';
   const off2 = plano ? F.W / 2 + 2 : off;
-  parts.push(LM('Molde macho', plano ? K.translateMesh(K.maskHeightMesh(F, S, k => male[k] + 6, 0) /* +6 mm de placa: sobresale de la hembra y empuja la malla hasta el fondo */, two ? -off2 : 0, 0) : mesh(male, two ? -off : 0), C.azul));
+  parts.push(LM('Molde macho', plano ? K.translateMesh(K.maskHeightMesh(F, S, k => male[k] - base + Math.max(1, p.grosorMacho ?? 2), 0) /* placa del macho con su propio grosor (ajustable) */, two ? -off2 : 0, 0) : mesh(male, two ? -off : 0), C.azul));
   if (two) {
     const St = dilate(F, S, t); const ht = tray ? dome(St, R + t, t * 0.4) : dome(St, R + t); const Dt = sign > 0 ? dilate(F, D, t * 0.5) : erode(F, D, Math.min(t * 0.5, 0.4)); const et = emb(Dt);
     const Hb = Math.max(base + H + E + 3, pinH + 4); const fem = new Float32Array(n);
@@ -1433,7 +1433,7 @@ const TERMO = (o = {}) => [{ ...shp(o.forma || 'corazon', ['corazon', 'circulo',
   sel('estilo', 'Diseño en el molde', 'liso', { liso: 'Liso (sin dibujo, como el vídeo)', relieve: 'En relieve', hundido: 'Hundido' }),
   num('alto', 'Altura (profundidad de cada mitad)', o.alto || 12, 2, 40), num('redondeo', 'Redondeo del borde', 7, 1, 25, 0.5, { show: p => p.perfil !== 'bandeja' }), num('relieveD', 'Profundidad del diseño', 1.2, 0.4, 3, 0.1, { show: p => p.estilo !== 'liso' }),
   num('eva', 'Holgura entre moldes (grosor de la malla o lámina)', o.eva || 2, 0.5, 6, 0.1), num('base', 'Grosor de la base', 3, 2, 8, 0.5), sel('piezas', 'Piezas', 'ambas', { ambas: 'Macho + hembra', macho: 'Solo macho' }),
-  sel('molde', 'Tipo de molde', 'plano', { plano: 'Bandeja + placa con la forma', bloque: 'Bloque cuadrado' }), chk('guias', 'Guías de centrado en las esquinas', true, { show: p => p.molde === 'bloque' }),
+  num('grosorMacho', 'Grosor de la placa del macho', 2, 1, 10, 0.5, { show: p => p.molde !== 'bloque' }), sel('molde', 'Tipo de molde', 'plano', { plano: 'Bandeja + placa con la forma', bloque: 'Bloque cuadrado' }), chk('guias', 'Guías de centrado en las esquinas', true, { show: p => p.molde === 'bloque' }),
   chk('malla', 'Incluir la figura de malla para imprimir', o.malla ?? true), sel('rejilla', 'Agujeros de la malla', 'cuadricula', { cuadricula: 'Cuadrados', rombos: 'Rombos', panal: 'Hexágonos', mosaico: 'Mosaico' }, { show: p => p.malla }),
   num('paso', 'Tamaño de agujero', 3.2, 2, 8, 0.2, { show: p => p.malla }), num('hilo', 'Grosor del hilo', 0.9, 0.5, 2, 0.1, { show: p => p.malla }), num('bordeMalla', 'Borde macizo', 2.5, 1, 6, 0.5, { show: p => p.malla }),
   num('eMalla', 'Grosor de la malla', 0.8, 0.4, 2, 0.1, { show: p => p.malla }), num('pestana', 'Pestaña plana alrededor de la malla', 2, 0, 10, 0.5, { show: p => p.malla }), num('minDiseno', 'Grosor mínimo de las líneas del dibujo', 1.4, 0.8, 3, 0.1, { show: p => p.malla && p.diseno !== 'ninguno' }), sel('disenoMalla', 'Diseño en la malla', 'macizo', { macizo: 'Macizo (como bordado)', malla: 'Malla de otro color' }, { show: p => p.malla && p.diseno !== 'ninguno' }), chk('anilla', 'Pestaña para colgar', false, { show: p => p.malla }), num('movColgar', 'Mover la pestaña', 0, -100, 100, 5, { unit: '%', show: p => p.malla && p.anilla }), sel('trasera', 'Malla trasera', o.trasera || 'si', { si: 'Sí', no: 'Solo la delantera' }, { show: p => p.malla }),
