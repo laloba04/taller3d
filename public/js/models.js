@@ -51,7 +51,7 @@ function standParts(F, tabW, thick, cx, y0) {
 const tabMask = (F, cx, yTop, tabW, h = 7) => F.rect(cx - tabW / 2, yTop - 1, cx + tabW / 2, yTop + h, 0.5);
 function clipText(F, m, region) { return and(m, region); }
 const FIT = { circulo: [.74, .58], ovalo: [.8, .6], ondulado: [.68, .52], ovalo_ondulado: [.74, .55], corazon: [.6, .42, 0, -.1], estrella: [.42, .26, 0, .1], hexagono: [.74, .55], octogono: [.74, .55],
-  cuadrado: [.82, .7], rect: [.88, .74], capsula: [.8, .64], arco: [.8, .62, 0, .08], hueso: [.62, .52], pez: [.55, .55, .12], huella: [.4, .22, 0, .33], conejo: [.62, .3, 0, .26], zanahoria: [.5, .34, .06],
+  cuadrado: [.82, .7], rect: [.88, .74], capsula: [.8, .64], arco: [.8, .62, 0, .08], hueso: [.62, .52], pez: [.55, .55, .12], loro: [.56, .36, -.06, .08], huella: [.42, .26, 0, .16], conejo: [.62, .3, 0, .26], zanahoria: [.5, .34, .06],
   flor: [.6, .5], nube: [.7, .45, 0, .1], escudo: [.74, .5, 0, -.08], bola: [.64, .48, 0, .1], arbol: [.48, .22, 0, .26], campana: [.6, .28, 0, .14], casa: [.66, .45, 0, .22], galleta: [.48, .2, 0, .06],
   lazo: [.3, .2], copo: [.5, .22], gota: [.6, .38, 0, .28], marcapaginas: [.7, .8] };
 
@@ -98,18 +98,23 @@ function gPlaca(p, o = {}) {
   const m1 = measure(t1, f1), m2 = t2 ? measure(t2, f2) : null, mi = ic ? measure(ic, font('emoji')) : null;
   const k2 = p.escala2 || 0.42, gap = 0.12;
   const hTot = s => s * (m1.h + (m2 ? gap + m2.h * k2 : 0) + (mi ? mi.h * 0.9 + gap : 0));
-  let s = Math.min(bw / m1.w, m2 ? bw / (m2.w * k2) : Infinity, bh / (hTot(1))); if (!p.texto) s = Math.min(s, 1e9);
-  if (o.maxTexto) s = Math.min(s, o.maxTexto);
-  let T = F.blank();
-  if (p.conImagen && p.img) { const ih = bh * 0.55; const sz = imgFit(p.img, bw, ih); T = or(T, IM(F, p, cx, cy - bh / 2 + sz.h / 2, sz.w, sz.h)); const rest = bh - sz.h - 1.5; s = Math.min(s, bw / m1.w, rest / (m1.h + (m2 ? gap + m2.h * k2 : 0))); }
-  let y = p.conImagen && p.img ? cy - bh / 2 + bh * 0.55 + 1.5 : cy - hTot(s) / 2;
-  if (mi) { const hi = mi.h * s * 0.9; T = or(T, F.text(ic, font('emoji'), s * 0.9, cx, y + hi / 2)); y += hi + gap * s; }
-  if (p.texto) { T = or(T, F.text(t1, f1, s, cx, y + m1.h * s / 2)); y += m1.h * s + gap * s; }
-  if (m2) T = or(T, F.text(t2, f2, s * k2, cx, y + m2.h * s * k2 / 2));
+  let s0 = Math.min(bw / m1.w, m2 ? bw / (m2.w * k2) : Infinity, bh / (hTot(1)));
+  if (o.maxTexto) s0 = Math.min(s0, o.maxTexto);
   const rim = p.borde || 0;
-  T = and(T, erode(F, S, rim + 0.8));
   const h = holeTab(F, S, p.agujero, p.dAg, undefined, undefined, p.movAg); let base = h.base;
   const cl = m => h.clear ? sub(m, h.clear) : m;
+  /* el texto tiene que caber entero dentro de la forma (sin pisar el borde ni el agujero): si se sale, se encoge */
+  const dentro = h.clear ? sub(erode(F, S, rim + 0.8), dilate(F, h.clear, 0.6)) : erode(F, S, rim + 0.8);
+  const textos = s => { let T = F.blank(), sI = s;
+    if (p.conImagen && p.img) { const ih = bh * 0.55; const sz = imgFit(p.img, bw, ih); T = or(T, IM(F, p, cx, cy - bh / 2 + sz.h / 2, sz.w, sz.h)); const rest = bh - sz.h - 1.5; sI = Math.min(s, bw / m1.w, rest / (m1.h + (m2 ? gap + m2.h * k2 : 0))); }
+    let y = p.conImagen && p.img ? cy - bh / 2 + bh * 0.55 + 1.5 : cy - hTot(sI) / 2;
+    if (mi) { const hi = mi.h * sI * 0.9; T = or(T, F.text(ic, font('emoji'), sI * 0.9, cx, y + hi / 2)); y += hi + gap * sI; }
+    if (p.texto) { T = or(T, F.text(t1, f1, sI, cx, y + m1.h * sI / 2)); y += m1.h * sI + gap * sI; }
+    if (m2) T = or(T, F.text(t2, f2, sI * k2, cx, y + m2.h * sI * k2 / 2));
+    return T; };
+  let T = textos(s0);
+  for (let i = 0; i < 14; i++) { const n = K.count(T); if (!n || K.count(sub(T, dentro)) <= n * 0.002) break; s0 *= 0.93; T = textos(s0); }
+  T = and(T, erode(F, S, rim + 0.8));   /* mismo recorte que antes (el agujero lo quita cl()) */
   const hb = p.hBase, hr = p.hRel; const layers = [];
   if (p.nfc) { const pocket = F.disk(0, 0, p.dNfc / 2 + 0.3); layers.push(L('Base', base, 0, 0.8, o.c1 || C.azul), L('Hueco NFC (pausa aquí)', sub(base, pocket), 0.8, 0.8 + p.eNfc, o.c1 || C.azul), L('Tapa', base, 0.8 + p.eNfc, Math.max(hb, 1.8 + p.eNfc), o.c1 || C.azul)); }
   else layers.push(L('Base', base, 0, hb, o.c1 || C.azul));
@@ -1257,7 +1262,7 @@ function gVarios(p, genOne) {
   for (const nm of names) { const r = genOne({ ...p, texto: nm }); pieces.push(r); }
   const W = pieces.map(r => r.F.W - 10); const H = pieces.map(r => r.F.H - 10); const colW = Math.max(...W) + sp, rowHh = Math.max(...H) + sp; const rows = Math.ceil(names.length / cols);
   pieces.forEach((r, i) => { const cx = ((i % cols) - (cols - 1) / 2) * colW, cy = -(((i / cols) | 0) - (rows - 1) / 2) * rowHh;
-    for (const Lr of r.layers) { const m = K.maskToMesh(r.F, Lr.mask, Lr.z0, Lr.z1); K.fixOrientation(m); K.translateMesh(m, cx, cy); const ex = layers.find(q => q.name === Lr.name); if (ex) ex.mesh = K.mergeMeshes([ex.mesh, m]); else layers.push(LM(Lr.name, m, Lr.color)); } });
+    for (const Lr of r.layers) { const m = K.meshFromMasksOk(r.F, Lr); K.translateMesh(m, cx, cy); const ex = layers.find(q => q.name === Lr.name); if (ex) ex.mesh = K.mergeMeshes([ex.mesh, m]); else layers.push(LM(Lr.name, m, Lr.color)); } });
   return { layers };
 }
 
@@ -1317,7 +1322,7 @@ function M(id, name, desc, params, gen, extra = {}) {
 const UMB = num('umbral', 'Umbral de imagen', 55, 5, 95, 1, { unit: '%' });
 const NOMBRE_BASE = [txt('texto', 'Texto', 'Maria'), fnt(), num('ancho', 'Ancho del texto', 55, 25, 140), num('borde', 'Contorno', 2.5, 1, 6), num('hBase', 'Grosor base', 3, 1.5, 6), num('hTexto', 'Relieve del texto', 1.2, 0.4, 4, 0.2)];
 const PLACA = (o = {}) => [
-  ...(o.forma ? [] : [shp(o.def || 'circulo', o.formas || ['circulo', 'ovalo', 'ondulado', 'ovalo_ondulado', 'corazon', 'estrella', 'hexagono', 'cuadrado', 'capsula', 'hueso', 'pez', 'flor', 'nube'])]),
+  ...(o.forma ? [] : [shp(o.def || 'circulo', o.formas || ['circulo', 'ovalo', 'ondulado', 'ovalo_ondulado', 'corazon', 'estrella', 'hexagono', 'cuadrado', 'capsula', 'hueso', 'pez', 'loro', 'flor', 'nube'])]),
   num('ancho', 'Ancho', o.ancho || 45, 20, 120), ...(o.cuadrada ? [] : [num('alto', 'Alto', o.alto || 45, 15, 120)]),
   txt('texto', 'Texto', o.texto ?? 'Luna'), ...(o.linea2 !== false ? [txt('texto2', 'Segunda línea', o.texto2 ?? '')] : []), fnt('fuente', 'Fuente', o.fuente || 'fredoka'),
   ...(o.icono ? [txt('icono', 'Icono (emoji)', o.icono)] : []), num('borde', 'Borde en relieve', o.borde ?? 1.6, 0, 4, 0.2), num('hBase', 'Grosor base', 2.6, 1.2, 6, 0.2), num('hRel', 'Relieve', 1, 0.4, 3, 0.2),
@@ -1415,6 +1420,7 @@ M('pet-ondulada', 'Placa ovalada ondulada', 'Con el borde ondulado.', PET('ovalo
 M('pet-hueso', 'Placa hueso', 'La de toda la vida para perros.', PET('hueso', 48, 26, { texto: 'Feijão', agujero: 'izq' }), p => gPlaca(p, { forma: 'hueso', c1: C.lila }));
 M('pet-pez', 'Placa pez', 'Pensada para gatos.', [...PET('pez', 48, 30, { texto: 'Geleia', agujero: 'izq' })], p => gPlaca(p, { forma: 'pez', c1: C.lila }));
 M('pet-huella', 'Placa huella', 'Huella con el nombre.', PET('huella', 40, 40, { texto: 'Toby' }), p => gPlaca(p, { forma: 'huella', c1: C.lila }));
+M('pet-loro', 'Placa loro', 'Para pájaros: loro de perfil con su nombre.', PET('loro', 46, 52, { texto: 'Lucas', agujero: 'arriba' }), p => gPlaca(p, { forma: 'loro', c1: C.verde || C.lila }));
 M('pet-forma', 'Placa con cualquier forma', 'Usa tu propia silueta (PNG con fondo transparente o dibujo negro).', [img('img', 'Silueta', 'silueta'), UMB, ...PET('imagen', 45, 45, { texto: 'Luigi' })], p => gPlaca(p, { forma: 'imagen', c1: C.lila }));
 
 // Lámparas
@@ -1585,7 +1591,7 @@ const CATEGORIES = [
   { id: 'rattan', name: 'Rattan', icon: '🪺', desc: 'Letras y paneles con rejilla de rattan.', models: ['rattan-letras', 'rattan-base', 'rattan-pared', 'rattan-panel'] },
   { id: 'pruebas', name: 'Archivos de prueba', icon: '📏', desc: 'Calibración, tolerancias y roscas para ajustar tu impresora.', hidden: true, models: ['test-tolerancia', 'test-cubo', 'test-puentes', 'test-rosca', 'chapa-test'] },
   { id: 'termoformado', name: 'Termoformado', icon: '🧺', desc: 'Figuras de malla impresas que se moldean en caliente, con sus moldes macho y hembra.', models: ['termo', 'tb-corazon', 'tb-cuadrado', 'tb-estrella', 'tb-flor', 'tb-lazo', 'tb-arbol', 'termo-nav', 'termo-copo'] },
-  { id: 'mascotas', name: 'Mascotas', icon: '🐾', desc: 'Placas de identificación con nombre y teléfono.', models: ['pet-ovalada', 'pet-ondulada', 'pet-hueso', 'pet-pez', 'pet-huella', 'pet-forma'] },
+  { id: 'mascotas', name: 'Mascotas', icon: '🐾', desc: 'Placas de identificación con nombre y teléfono.', models: ['pet-ovalada', 'pet-ondulada', 'pet-hueso', 'pet-pez', 'pet-huella', 'pet-loro', 'pet-forma'] },
   { id: 'lamparas', name: 'Lámparas', icon: '💡', desc: 'Lámparas LED con tu nombre o @.', models: ['letra-lampara', 'lamp-social'] },
   { id: 'cortadores', name: 'Cortadores', icon: '🍪', desc: 'Cortadores de galletas y sellos.', models: ['cortador', 'cortador-hueco', 'cort-grid', 'sellos-plastilina', 'sello-circ', 'sello-brig', 'sello-letras', 'eyector', 'eyector-cupula', 'eyector-escala', 'eyector-caramelo', 'rodillo', 'rodillo-mosaico', 'cuenco'] },
   { id: 'letreros', name: 'Letreros', icon: '🪧', desc: 'Palabras, nombres y @ en capas de 2 o 3 colores.', models: ['rattan-letras', 'let-2', 'let-3', 'let-offset', 'let-sep2', 'let-sep3', 'let-colocacion', 'let-corazon', 'let-2lin-img', 'let-2lin-img3', 'let-superpuesto', 'soc-2', 'soc-3', 'soc-rect2', 'soc-rect3', 'soc-qr', 'placa-prof', 'multicapa', 'cuadro', 'soporte-foto', 'trofeo'] },

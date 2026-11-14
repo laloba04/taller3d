@@ -14,7 +14,8 @@ function toParts(r) {
   for (const L of r.layers) {
     if (L.mesh) { if (L.mesh.idx.length) parts.push({ name: L.name, color: L.color, mesh: L.mesh }); continue; }
     if (!L.mask || !K.count(L.mask) || L.z1 <= L.z0) continue;
-    const mesh = K.meshFromMasks(r.F, L); if (mesh.idx.length) parts.push({ name: L.name, color: L.color, mesh, z0: L.z0, z1: L.z1 });
+    const mesh = K.meshFromMasksOk(r.F, L);
+    if (mesh.idx.length) parts.push({ name: L.name, color: L.color, mesh, z0: L.z0, z1: L.z1 });
   }
   return parts;
 }

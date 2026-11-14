@@ -118,3 +118,9 @@ button{font:inherit;cursor:pointer}
 .mej-tg{background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 12px;margin:-4px 0 14px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .chip.peligro{background:#c0392b;border-color:#c0392b;color:#fff}.mej-seguro{font-size:12.5px;font-weight:600;color:#c0392b}
 .stage-bar .ghost.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+
+/* botonera de emojis en los campos de icono */
+.emojis { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.emojis button { font-size: 18px; line-height: 1; padding: 4px 5px; border: 1px solid #ddd; border-radius: 8px; background: #fff; cursor: pointer; }
+.emojis button:hover { background: #f3eefc; border-color: #b9a6e8; }
+.f .pista { display: block; margin-top: 4px; font-size: 12px; color: #777; }

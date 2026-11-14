@@ -268,7 +268,7 @@ const STROKE_SHAPES = {
 const SHAPES = {
   circulo: 'Círculo', ovalo: 'Óvalo', ondulado: 'Círculo ondulado', ovalo_ondulado: 'Óvalo ondulado', corazon: 'Corazón', estrella: 'Estrella',
   hexagono: 'Hexágono', octogono: 'Octógono', cuadrado: 'Cuadrado redondeado', rect: 'Rectángulo', capsula: 'Cápsula', arco: 'Arco',
-  hueso: 'Hueso', pez: 'Pez', huella: 'Huella', conejo: 'Conejo', zanahoria: 'Zanahoria', flor: 'Flor', nube: 'Nube', escudo: 'Escudo',
+  hueso: 'Hueso', pez: 'Pez', huella: 'Huella', loro: 'Loro', conejo: 'Conejo', zanahoria: 'Zanahoria', flor: 'Flor', nube: 'Nube', escudo: 'Escudo',
   bola: 'Bola de Navidad', arbol: 'Árbol', campana: 'Campana', casa: 'Casita', galleta: 'Muñeco de jengibre', lazo: 'Lazo', copo: 'Copo (silueta)',
   gota: 'Gota', marcapaginas: 'Marcapáginas', lazo_rosa: 'Lazo solidario', esmalte: 'Bote de esmalte',
 };
@@ -293,8 +293,13 @@ function shapePath(c, kind, cx, cy, w, h) {
     case 'marcapaginas': { c.moveTo(cx - W, cy - H + 3); c.arcTo(cx - W, cy - H, cx, cy - H, 3); c.arcTo(cx + W, cy - H, cx + W, cy, 3); c.lineTo(cx + W, cy + H); c.lineTo(cx, cy + H - W * 0.7); c.lineTo(cx - W, cy + H); c.closePath(); break; }
     case 'arco': { const r = Math.min(W, h * 0.5); c.moveTo(cx - W, cy + H); c.lineTo(cx - W, cy - H + r); c.arc(cx, cy - H + r, W, Math.PI, 0); c.lineTo(cx + W, cy + H); c.closePath(); break; }
     case 'hueso': { const r = H * 0.52; roundRect(c, cx - W + r, cy - H * 0.42, w - 2 * r, H * 0.84, 2); for (const sx of [-1, 1]) for (const sy of [-1, 1]) circ(c, cx + sx * (W - r), cy + sy * (H - r), r); break; }
-    case 'pez': { ell(c, cx + W * 0.12, cy, W * 0.72, H * 0.9); poly(c, [[cx - W * 0.4, cy], [cx - W, cy - H * 0.75], [cx - W * 0.85, cy], [cx - W, cy + H * 0.75]]); break; }
+    case 'pez': { ell(c, cx + W * 0.12, cy, W * 0.72, H * 0.9); poly(c, [[cx - W * 0.25, cy + H * 0.3], [cx - W, cy + H * 0.75], [cx - W * 0.82, cy], [cx - W, cy - H * 0.75], [cx - W * 0.25, cy - H * 0.3]]); break; }   /* cola metida en el cuerpo y en el mismo sentido de giro (antes quedaba una muesca) */
     case 'huella': { ell(c, cx, cy + H * 0.3, W * 0.5, H * 0.42); for (const [x, y, r] of [[-0.68, -0.15, 0.2], [-0.27, -0.6, 0.22], [0.27, -0.6, 0.22], [0.68, -0.15, 0.2]]) ell(c, cx + x * W, cy + y * H, r * w * 0.6, r * h * 0.75); break; }
+    case 'loro': { /* loro de perfil mirando a la derecha: cuerpo, cabeza con penacho, pico curvo y cola larga (todo en sentido horario) */
+      ell(c, cx - W * 0.06, cy + H * 0.06, W * 0.64, H * 0.5, -0.45); ell(c, cx + W * 0.3, cy - H * 0.5, W * 0.4, H * 0.32);
+      ell(c, cx + W * 0.08, cy - H * 0.8, W * 0.12, H * 0.15, -0.8); ell(c, cx + W * 0.24, cy - H * 0.84, W * 0.1, H * 0.13, -0.3);
+      c.moveTo(cx + W * 0.6, cy - H * 0.66); c.quadraticCurveTo(cx + W * 1.0, cy - H * 0.66, cx + W * 0.94, cy - H * 0.26); c.quadraticCurveTo(cx + W * 0.84, cy - H * 0.36, cx + W * 0.6, cy - H * 0.32); c.closePath();
+      c.moveTo(cx - W * 0.2, cy + H * 0.4); c.quadraticCurveTo(cx - W * 0.4, cy + H * 0.78, cx - W * 0.6, cy + H); c.lineTo(cx - W * 0.92, cy + H * 0.92); c.quadraticCurveTo(cx - W * 0.72, cy + H * 0.6, cx - W * 0.6, cy + H * 0.3); c.closePath(); break; }
     case 'conejo': { ell(c, cx, cy + H * 0.32, W * 0.95, H * 0.62); ell(c, cx - W * 0.35, cy - H * 0.45, W * 0.22, H * 0.55, -0.15); ell(c, cx + W * 0.35, cy - H * 0.45, W * 0.22, H * 0.55, 0.15); break; }
     case 'zanahoria': { c.moveTo(cx - W * 0.45, cy - H * 0.55); c.quadraticCurveTo(cx + W * 0.2, cy - H * 0.75, cx + W, cy); c.quadraticCurveTo(cx + W * 0.2, cy + H * 0.75, cx - W * 0.45, cy + H * 0.55); c.quadraticCurveTo(cx - W * 0.6, cy, cx - W * 0.45, cy - H * 0.55); c.closePath();
       for (const a of [-0.55, 0, 0.55]) ell(c, cx - W * 0.68, cy + a * H * 0.6, W * 0.26, H * 0.16, a * 0.8); break; }
@@ -561,6 +566,13 @@ function level(sd, a, b) { const o = new Uint8Array(sd.length); for (let i = 0; 
 
 function traceLoops(F, m, eps) { const loops = maskToMesh(F, m, 0, 0, 'loops'); return loops.map(l => rdpClosed(l, eps ?? 0.3 / F.res)).filter(l => l.length > 2 && Math.abs(area(l)) > 0.02); }
 function meshFromMasks(F, layer) { const m = maskToMesh(F, layer.mask, layer.z0, layer.z1); fixOrientation(m); return m; }
+/* igual, con red de seguridad: con algunas alineaciones de píxeles sale una arista suelta; se repasa la máscara y se rehace */
+function meshFromMasksOk(F, layer) {
+  let m = meshFromMasks(F, layer); if (!m.idx.length || !MF || checkMesh(m).ok) return m;
+  for (const fx of [q => close(F, q, 0.25), q => open(F, q, 0.25), q => close(F, q, 0.5), q => dilate(F, q, 0.15), q => erode(F, q, 0.15)]) {
+    const m2 = meshFromMasks(F, { ...layer, mask: fx(layer.mask) }); if (m2.idx.length && checkMesh(m2).ok) return m2; }
+  return m;
+}
 
 /* ---------- sólidos 3D con Manifold (WebAssembly) ----------
    Si Manifold está cargado se pueden hacer uniones, restas e intersecciones 3D reales que siempre dan
@@ -707,5 +719,5 @@ function demoImage(kind = 'dibujo') {
 
 return { IS_DOM, canvas: mkCanvas, setFontSource, useManifold, hasCSG, csgFree, mf: () => MF, keep, maskSolid, meshSolid, union, subtract, intersect, solidMesh, checkMesh, unionMeshes, renderThumb,
   traceLoops, makeQR, tube, threadProfile, shell, maskHeightMesh, translateMesh, mergeMeshes, signedDist, level, MESH_WARN, setQuality, QUALITY, FONTS, font, loadFont, measure, fitSize, frame, or, and, sub, inv, count, edt, dilate, erode, close, open, outline, ring, fillHoles, bbox, extreme, shift, mirrorTo, components,
-  SHAPES, shapePath, PATTERNS, snowflake, wifiIcon, star, regPoly, roundRect, maskToMesh, meshFromMasks, fixOrientation, lathe, heightMesh, newMesh, toSTL, to3MF, agrupar, demoImage, rng };
+  SHAPES, shapePath, PATTERNS, snowflake, wifiIcon, star, regPoly, roundRect, maskToMesh, meshFromMasks, meshFromMasksOk, fixOrientation, lathe, heightMesh, newMesh, toSTL, to3MF, agrupar, demoImage, rng };
 })();

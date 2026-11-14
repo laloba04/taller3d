@@ -147,12 +147,20 @@ function renderCats() {
 function defaults(m) { const v = {}; for (const p of m.params) v[p.k] = p.type === 'img' ? demo(p.demo) : p.def; return v; }
 function vals(m) { if (!state.values[m.id]) state.values[m.id] = defaults(m); return state.values[m.id]; }
 function numVal(p, v) { return p.type === 'num' ? +v : p.type === 'sel' && typeof p.def === 'number' ? +v : v; }
+const EMOJIS = ['❤️', '⭐', '🌸', '🐾', '🐶', '🐱', '🦜', '🐰', '🦄', '🦋', '🌈', '☀️', '🌙', '🍀', '🎄', '🎅', '⛄', '🎁', '🎂', '👑', '⚽', '🏀', '🎵', '💎'];
 function buildForm(m) {
   const f = $('#params'); f.innerHTML = ''; const v = vals(m);
   for (const p of m.params) {
     const box = el('div', { class: 'f' + (p.type === 'chk' ? ' chk' : ''), 'data-k': p.k });
     const set = (x) => { v[p.k] = numVal(p, x); refreshVisibility(m); schedule(); };
-    if (p.type === 'text') { const i = el('input', { type: 'text', value: v[p.k] ?? '' }); i.addEventListener('input', () => set(i.value)); box.append(el('label', {}, p.label), i); }
+    if (p.type === 'text') { const i = el('input', { type: 'text', value: v[p.k] ?? '' }); i.addEventListener('input', () => set(i.value)); box.append(el('label', {}, p.label), i);
+      /* campos de icono/emoji: botonera con emojis para elegir sin teclado (en el campo de icono sustituye; en un texto se inserta donde está el cursor) */
+      if (/icono|emoji/i.test(p.label + ' ' + p.k)) { const solo = p.k === 'icono', lista = p.k === 'iconos'; const bar = el('div', { class: 'emojis' });
+        for (const e of EMOJIS) { const b = el('button', { type: 'button', title: 'Usar ' + e }, e);
+          b.addEventListener('click', () => { if (solo) i.value = e; else if (lista) i.value = (i.value.trim() ? i.value.trim().replace(/,\s*$/, '') + ', ' : '') + e;
+            else { const a0 = i.selectionStart ?? i.value.length, a1 = i.selectionEnd ?? a0; i.value = i.value.slice(0, a0) + e + i.value.slice(a1); }
+            set(i.value); i.focus(); }); bar.append(b); }
+        box.append(bar, el('small', { class: 'pista' }, 'También puedes escribir cualquier emoji: Windows + . (punto) en Windows, Ctrl + Cmd + Espacio en Mac.')); } }
     else if (p.type === 'area') { const i = el('textarea', {}); i.value = v[p.k] ?? ''; i.addEventListener('input', () => set(i.value)); box.append(el('label', {}, p.label), i); }
     else if (p.type === 'font') { const s = el('select', {}); for (const fo of K.FONTS) { const o = el('option', { value: fo.id }, fo.name); o.style.fontFamily = `"${fo.fam}"`; s.append(o); } s.value = v[p.k]; s.addEventListener('change', () => set(s.value)); box.append(el('label', {}, p.label), s); }
     else if (p.type === 'sel') { const s = el('select', {}); for (const [k, l] of Object.entries(p.opts)) s.append(el('option', { value: k }, l)); s.value = String(v[p.k]); s.addEventListener('change', () => set(s.value)); box.append(el('label', {}, p.label), s); }
