@@ -64,7 +64,7 @@ function gNombre(p, o = {}) {
   const F = frame(p.ancho + iconW + 2 * (b + b2) + 4 * R, d.h + 2 * (b + b2) + 4 * R + (o.pie ? 6 : 0));
   const tx = iconW ? iconW / 2 + 1 : 0;
   let T = F.text(t, f, d.s, tx, 0);
-  if (o.icono) { const im = p.img; const s = imgFit(im, iconW, iconW); T = or(T, F.image(im, tx - p.ancho / 2 - 1.5 - iconW / 2, 0, s.w, s.h, { thr: p.umbral })); }
+  if (o.icono) { const im = p.img; const s = imgFit(im, iconW, iconW); T = or(T, IM(F, p, tx - p.ancho / 2 - 1.5 - iconW / 2, 0, s.w, s.h)); }
   let mid = close(F, dilate(F, T, b), Math.min(1.5, b));
   let base = o.tres ? close(F, dilate(F, T, b + b2), 1.5) : mid;
   if (o.pie) { const bb = bbox(F, base); const bar = F.rect(bb.x0 + 2, bb.y1 - 5, bb.x1 - 2, bb.y1, 1); base = or(base, bar); if (!o.tres) mid = base; }
@@ -91,7 +91,7 @@ function gSuperpuestos(p, o = {}) {
 function gPlaca(p, o = {}) {
   const forma = o.forma || p.forma; const W = p.ancho, H = p.alto ?? p.ancho; const R = (p.dAg || 4) / 2 + 4;
   const F = frame(W + 4 * R, H + 4 * R);
-  let S = forma === 'imagen' ? fillHoles(F, close(F, F.image(p.img, 0, 0, ...Object.values(imgFit(p.img, W, H)), { thr: p.umbral }), 1.5)) : F.shape(forma, 0, 0, W, H);
+  let S = forma === 'imagen' ? fillHoles(F, close(F, IMS(F, p, 0, 0, ...Object.values(imgFit(p.img, W, H))), 1.5)) : F.shape(forma, 0, 0, W, H);
   const fit = FIT[forma] || [.6, .45]; const bw = W * fit[0], bh = H * fit[1]; const cx = W * (fit[2] || 0), cy = H * (fit[3] || 0);
   const f1 = font(p.fuente), f2 = font(p.fuente2 || p.fuente);
   const t1 = lines(p.texto, ''), t2 = p.texto2 ? lines(p.texto2, '') : null, ic = p.icono ? [p.icono] : null;
@@ -101,7 +101,7 @@ function gPlaca(p, o = {}) {
   let s = Math.min(bw / m1.w, m2 ? bw / (m2.w * k2) : Infinity, bh / (hTot(1))); if (!p.texto) s = Math.min(s, 1e9);
   if (o.maxTexto) s = Math.min(s, o.maxTexto);
   let T = F.blank();
-  if (p.conImagen && p.img) { const ih = bh * 0.55; const sz = imgFit(p.img, bw, ih); T = or(T, F.image(p.img, cx, cy - bh / 2 + sz.h / 2, sz.w, sz.h, { thr: p.umbral })); const rest = bh - sz.h - 1.5; s = Math.min(s, bw / m1.w, rest / (m1.h + (m2 ? gap + m2.h * k2 : 0))); }
+  if (p.conImagen && p.img) { const ih = bh * 0.55; const sz = imgFit(p.img, bw, ih); T = or(T, IM(F, p, cx, cy - bh / 2 + sz.h / 2, sz.w, sz.h)); const rest = bh - sz.h - 1.5; s = Math.min(s, bw / m1.w, rest / (m1.h + (m2 ? gap + m2.h * k2 : 0))); }
   let y = p.conImagen && p.img ? cy - bh / 2 + bh * 0.55 + 1.5 : cy - hTot(s) / 2;
   if (mi) { const hi = mi.h * s * 0.9; T = or(T, F.text(ic, font('emoji'), s * 0.9, cx, y + hi / 2)); y += hi + gap * s; }
   if (p.texto) { T = or(T, F.text(t1, f1, s, cx, y + m1.h * s / 2)); y += m1.h * s + gap * s; }
@@ -284,6 +284,7 @@ function gMulticapa(p) {
   const s = imgFit(p.img, p.ancho, p.ancho); const F = frame(s.w + 2 * p.offset + 8, s.h + 2 * p.offset + 8);
   const Lu = F.lum(p.img, 0, 0, s.w, s.h); const n = F.n; const O = new Uint8Array(n), D = new Uint8Array(n);
   const t1 = 0.93, t2 = p.umbral / 100; for (let i = 0; i < n; i++) { if (Lu[i] >= 0 && Lu[i] < t1) O[i] = 1; if (Lu[i] >= 0 && Lu[i] < t2) D[i] = 1; }
+  const cI = IMK(F, p, 0, 0, s.w, s.h); if (cI) { O.set(cI.all); D.set(cI.all); }
   const Of = fillHoles(F, close(F, O, 1)); const base = close(F, dilate(F, Of, p.offset), 2);
   return { F, layers: [L('Capa 1 (contorno)', base, 0, 3, C.oro), L('Capa 2 (silueta)', Of, 3, 4.6, C.lila), L('Capa 3 (detalles)', and(D, Of), 4.6, 5.6, C.blanco)] };
 }
@@ -294,7 +295,7 @@ function gPlacaDibujo(p, o = {}) {
   const S = F.shape(p.forma, 0, cy, W, H); const inner = erode(F, S, 2);
   let det;
   if (o.rayas) det = F.pattern(p.patron, p.sep, p.grosorLinea);
-  else { const s = imgFit(p.img, W * 0.86, H * 0.86); det = F.image(p.img, 0, cy, s.w, s.h, { thr: p.umbral }); }
+  else { const s = imgFit(p.img, W * 0.86, H * 0.86); det = IM(F, p, 0, cy, s.w, s.h); }
   let T = F.blank(); if (p.texto) { const f = font(p.fuente); const t = lines(p.texto, ''); const s = fitSize(t, f, W * 0.8, H * 0.35); T = F.text(t, f, s, 0, cy + (o.rayas ? 0 : H * 0.3)); }
   det = sub(and(det, inner), dilate(F, T, o.rayas ? 2.2 : 0.8));
   const layers = [L('Placa', S, 0, 2.4, o.rayas ? C.crema : C.blanco), L('Dibujo', or(det, ring(F, S, 1.4)), 2.4, 3.2, C.negro)];
@@ -431,7 +432,7 @@ function gQR(p, o = {}) {
   const S = F.shape(p.forma, 0, y0 + H / 2, W, H); let y = y0 + top; let D = F.blank();
   if (title) { const s = fitSize([title], f, q, tH); D = or(D, F.text([title], f, s, 0, y + tH / 2)); y += tH + m * 0.4; }
   if (lH) { if (v === 'wifi') D = or(D, K.wifiIcon(F, 0, y + lH * 0.05, lH, lH * 0.12)); else if (v === 'resenas') D = or(D, F.draw(c => { for (let k = -2; k <= 2; k++) { c.beginPath(); const pts = K.star(5, lH * 0.5, lH * 0.22, k * lH * 1.15, y + lH / 2); c.moveTo(...pts[0]); pts.forEach(pt => c.lineTo(...pt)); c.fill(); } }));
-    else { const s = imgFit(p.img, q, lH); D = or(D, F.image(p.img, 0, y + lH / 2, s.w, s.h, { thr: p.umbral })); } y += lH + m * 0.4; }
+    else { const s = imgFit(p.img, q, lH); D = or(D, IM(F, p, 0, y + lH / 2, s.w, s.h)); } y += lH + m * 0.4; }
   D = or(D, F.qr(qrContent(p, v), 0, y + q / 2, q)); y += q + m * 0.4;
   if (sH) { const s = fitSize([p.subtitulo], font('montserrat'), q, sH); D = or(D, F.text([p.subtitulo], font('montserrat'), s, 0, y + sH / 2)); }
   const layers = [L('Placa', S, 0, 3, C.blanco), L('QR y textos', and(D, erode(F, S, 1)), 3, 4, C.negro)];
@@ -551,7 +552,7 @@ function gDosLineas(p, o = {}) {
   const b = p.contorno + (o.tres ? p.contorno2 : 0); const F = frame(p.ancho + iconH + 2 * b + 8, H + 2 * b + 8);
   const xo = -iconH / 2; let T = or(F.text(t1, f, d1.s, xo - p.ancho * 0.12, -H / 2 + d1.h / 2), F.text(t2, f2, d2.s, xo, H / 2 - d2.h / 2));
   if (o.corazon) T = or(T, F.shape('corazon', xo + p.ancho / 2 + d1.h * 0.1, -H / 2 + d1.h * 0.55, d1.h * 0.8, d1.h * 0.72));
-  if (o.icono) { const s = imgFit(p.img, iconH, iconH); T = or(T, F.image(p.img, xo + p.ancho / 2 + iconH / 2 + 2, 0, s.w, s.h, { thr: p.umbral })); }
+  if (o.icono) { const s = imgFit(p.img, iconH, iconH); T = or(T, IM(F, p, xo + p.ancho / 2 + iconH / 2 + 2, 0, s.w, s.h)); }
   const c1 = close(F, dilate(F, T, p.contorno), 2);
   if (o.tres) return { F, layers: [L('Base', close(F, dilate(F, T, b), 2.5), 0, 3, C.oro), L('Contorno', c1, 3, 4.5, C.lila), L('Texto', T, 4.5, 4.5 + p.alto, C.blanco)] };
   return { F, layers: [L('Base', c1, 0, 3, C.lila), L('Texto', T, 3, 3 + p.alto, C.blanco)] };
@@ -576,7 +577,7 @@ function gProfesional(p) {
   const d1 = tdim(t1, f, p.ancho), d2 = tdim(t2, f2, p.ancho * 0.45); const lH = p.logo ? d1.h * 1.6 : 0; const H = d1.h + d2.h + 4;
   const W = p.ancho + (lH ? lH + 6 : 0); const F = frame(W + 10, H + 26); const xo = (lH ? lH + 6 : 0) / 2;
   let T = or(F.text(t1, f, d1.s, xo, -H / 2 + d1.h / 2 - 6), F.text(t2, f2, d2.s, xo, H / 2 - d2.h / 2 - 6));
-  if (p.logo) { const s = imgFit(p.img, lH, lH); T = or(T, F.image(p.img, -W / 2 + lH / 2, -6, s.w, s.h, { thr: p.umbral })); }
+  if (p.logo) { const s = imgFit(p.img, lH, lH); T = or(T, IM(F, p, -W / 2 + lH / 2, -6, s.w, s.h)); }
   const yb = H / 2 - 6 + 2; const bar = F.rect(-W / 2 - 3, yb, W / 2 + 3, yb + 6, 1.5);
   const conn = and(close(F, dilate(F, T, 1.2), 3), F.rect(-W, -H, W, yb + 1)); const piece = or(conn, bar);
   return { F, layers: [L('Base', piece, 0, 3, C.marron), L('Texto', T, 3, 3 + p.alto, C.crema)], note: 'Se imprime tumbada; la barra inferior permite dejarla de pie.' };
@@ -606,7 +607,7 @@ function gPuzzle(p) {
     for (let j = 1; j < p.filas; j++) for (let i = 0; i < p.cols; i++) { const y = -H / 2 + j * ch; edge(c, cx - W / 2 + i * cw, y, cx - W / 2 + (i + 1) * cw, y, R() < 0.5 ? 1 : -1); }
     c.lineWidth = p.corte; c.stroke(); });
   const pieces = sub(plate, cuts); const layers = [L('Piezas', pieces, 0, 3, C.azul)];
-  if (p.dibujo) { const s = imgFit(p.img, W * 0.9, H * 0.9); layers.push(L('Dibujo', and(F.image(p.img, cx, 0, s.w, s.h, { thr: p.umbral }), erode(F, pieces, 0.6)), 3, 3.8, C.blanco)); }
+  if (p.dibujo) { const s = imgFit(p.img, W * 0.9, H * 0.9); layers.push(L('Dibujo', and(IM(F, p, cx, 0, s.w, s.h), erode(F, pieces, 0.6)), 3, 3.8, C.blanco)); }
   if (p.bandeja) { const tr = F.rectC(-cx, 0, W + 0.8 + 6, H + 0.8 + 6, 4); layers.push(L('Bandeja: fondo', tr, 0, 1.4, C.gris), L('Bandeja: borde', sub(tr, F.rectC(-cx, 0, W + 0.8, H + 0.8, 3)), 1.4, 4.4, C.gris)); }
   return { F, layers };
 }
@@ -630,10 +631,10 @@ function gMarcapaginas(p, o = {}) {
   const inner = erode(F, S, 2); const f = font(p.fuente); const t = lines(p.texto, 'Lucía');
   const s = fitSize(t, f, H * 0.62, W * 0.62); const T = and(F.text(t, f, s, 0, H * 0.05, { rot: -Math.PI / 2 }), inner);
   let dec;
-  if (o.estilo === 'silueta') { const ss = imgFit(p.img, W * 1.1, H * 0.32); const sil = F.image(p.img, 0, -H / 2 + ss.h / 2, ss.w, ss.h, { thr: p.umbral }); const body = F.rect(-W / 2, -H / 2 + ss.h * 0.85, W / 2, H / 2, 3);
+  if (o.estilo === 'silueta') { const ss = imgFit(p.img, W * 1.1, H * 0.32); const sil = IMS(F, p, 0, -H / 2 + ss.h / 2, ss.w, ss.h); const body = F.rect(-W / 2, -H / 2 + ss.h * 0.85, W / 2, H / 2, 3);
     const S2 = or(sil, body); const T2 = and(F.text(t, f, fitSize(t, f, H * 0.55, W * 0.62), 0, H * 0.12, { rot: -Math.PI / 2 }), erode(F, body, 2));
     return { F, layers: [L('Base', S2, 0, 1.4, C.negro), L('Relieve', or(ring(F, S2, 1.2), ring(F, erode(F, body, 2.6), 0.8)), 1.4, 2.2, C.oro), L('Nombre', T2, 1.4, 2.4, C.oro)] }; }
-  if (o.estilo === 'imagen') { const ss = imgFit(p.img, W * 0.8, H * 0.3); dec = F.image(p.img, 0, -H / 2 + 12 + ss.h / 2, ss.w, ss.h, { thr: p.umbral }); }
+  if (o.estilo === 'imagen') { const ss = imgFit(p.img, W * 0.8, H * 0.3); dec = IM(F, p, 0, -H / 2 + 12 + ss.h / 2, ss.w, ss.h); }
   else if (o.estilo === 'elegante') dec = ring(F, erode(F, S, 3), 0.8);
   else dec = F.pattern(o.estilo === 'geometrico' ? 'rombos' : 'floral', p.sep, 0.8, p.semilla || 3);
   dec = sub(and(dec, inner), dilate(F, T, 2), dilate(F, hole, 2));
@@ -718,7 +719,7 @@ function clipCierre(eMalla, L = 9) {
 
 /* imagen en color → capas por color (k-medias). Fondo = transparente, o el color que domina el borde de la imagen.
    Devuelve { all, capas: [{ m, hex }] } ordenadas de la más clara a la más oscura. */
-function capasColor(F, img, cx, cy, iw, ih, nCol) {
+function capasColor(F, img, cx, cy, iw, ih, nCol, fusion = false) {
   const d = F.rgba(img, cx, cy, iw, ih), { w, h } = F, n = w * h;
   /* rectángulo de la imagen, 2 píxeles hacia dentro para no leer el borde suavizado */
   const x0 = Math.max(1, Math.ceil((cx - iw / 2) * F.res + w / 2) + 2), x1 = Math.min(w - 2, Math.floor((cx + iw / 2) * F.res + w / 2) - 2), y0 = Math.max(1, Math.ceil((cy - ih / 2) * F.res + h / 2) + 2), y1 = Math.min(h - 2, Math.floor((cy + ih / 2) * F.res + h / 2) - 2);
@@ -726,8 +727,8 @@ function capasColor(F, img, cx, cy, iw, ih, nCol) {
   /* fondo opaco: el color más repetido en el contorno del rectángulo de la imagen */
   const cnt = new Map(); const borde = (i, j) => { const q = (j * w + i) * 4; if (d[q + 3] < 100) return; const key = (d[q] >> 4) << 8 | (d[q + 1] >> 4) << 4 | d[q + 2] >> 4; cnt.set(key, (cnt.get(key) || 0) + 1); };
   for (let i = x0; i <= x1; i++) { borde(i, y0); borde(i, y1); } for (let j = y0; j <= y1; j++) { borde(x0, j); borde(x1, j); }
-  let bg = null, best = 0; for (const [k2, v] of cnt) if (v > best) { best = v; bg = k2; }
-  const per = 2 * (x1 - x0 + y1 - y0); if (bg !== null && best > per * 0.35) { const br = ((bg >> 8) << 4) + 8, bgG = (((bg >> 4) & 15) << 4) + 8, bb = ((bg & 15) << 4) + 8;
+  let bg = null, best = 0, fondo = null; for (const [k2, v] of cnt) if (v > best) { best = v; bg = k2; }
+  const per = 2 * (x1 - x0 + y1 - y0); if (bg !== null && best > per * 0.35) { const br = ((bg >> 8) << 4) + 8, bgG = (((bg >> 4) & 15) << 4) + 8, bb = ((bg & 15) << 4) + 8; fondo = [br, bgG, bb];
     for (let q = 0; q < n; q++) if (dentro[q]) { const k3 = q * 4; if (Math.abs(d[k3] - br) + Math.abs(d[k3 + 1] - bgG) + Math.abs(d[k3 + 2] - bb) < 60) dentro[q] = 0; } }
   /* k-medias en RGB sobre una muestra */
   const idx = []; for (let q = 0; q < n; q++) if (dentro[q]) idx.push(q); if (!idx.length) return { all: F.blank(), capas: [] };
@@ -737,7 +738,16 @@ function capasColor(F, img, cx, cy, iw, ih, nCol) {
   while (mu.length < nCol) { let far = null, fd = -1; for (let t = 0; t < idx.length; t += paso) { const c = px(idx[t]); let m = Infinity; for (const u of mu) m = Math.min(m, dist(c, u)); if (m > fd) { fd = m; far = c; } } if (fd < 900) break; mu.push(far); }
   for (let it = 0; it < 12; it++) { const sum = mu.map(() => [0, 0, 0, 0]);
     for (let t = 0; t < idx.length; t += paso) { const c = px(idx[t]); let b = 0, bd = Infinity; mu.forEach((u, k4) => { const dd = dist(c, u); if (dd < bd) { bd = dd; b = k4; } }); const s2 = sum[b]; s2[0] += c[0]; s2[1] += c[1]; s2[2] += c[2]; s2[3]++; }
-    sum.forEach((s2, k4) => { if (s2[3]) mu[k4] = [s2[0] / s2[3], s2[1] / s2[3], s2[2] / s2[3]]; }); }
+    sum.forEach((s2, k4) => { if (s2[3]) mu[k4] = [s2[0] / s2[3], s2[1] / s2[3], s2[2] / s2[3]]; });
+    /* "todos los colores": nCol es un máximo; se quitan los colores casi iguales a otro y los residuales (bordes suavizados, < 1,5 % de la imagen) */
+    /* "todos los colores": nCol es un máximo. Se quitan los colores casi iguales a otro, los minúsculos (< 0,2 %) y las mezclas
+       de borde suavizado (un color poco presente que cae entre otros dos, o entre uno y el fondo); el negro de los detalles se queda */
+    if (fusion && (it === 5 || it === 9)) { const tot = sum.reduce((a, s2) => a + s2[3], 0) || 1; const sh = sum.map(s2 => s2[3] / tot); const vivo = sh.map(v => v >= 0.002);
+      for (let a = 0; a < mu.length; a++) for (let b = a + 1; b < mu.length; b++) if (vivo[a] && vivo[b] && dist(mu[a], mu[b]) < 1600) vivo[sh[a] >= sh[b] ? b : a] = false;
+      const ext = mu.map((u, k4) => vivo[k4] ? u : null); if (fondo) ext.push(fondo);
+      const entre = (c, a, b) => { const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], l2 = ab[0] ** 2 + ab[1] ** 2 + ab[2] ** 2; if (l2 < 1) return false; const t = ((c[0] - a[0]) * ab[0] + (c[1] - a[1]) * ab[1] + (c[2] - a[2]) * ab[2]) / l2; if (t < 0.15 || t > 0.85) return false; return dist(c, [a[0] + t * ab[0], a[1] + t * ab[1], a[2] + t * ab[2]]) < 900; };
+      mu.forEach((u, k4) => { if (!vivo[k4] || sh[k4] >= 0.04) return; for (let a = 0; a < ext.length; a++) for (let b = a + 1; b < ext.length; b++) if (a !== k4 && b !== k4 && ext[a] && ext[b] && (a >= mu.length || sh[a] > sh[k4]) && (b >= mu.length || sh[b] > sh[k4]) && entre(u, ext[a], ext[b])) vivo[k4] = false; });
+      if (vivo.some(v => v)) { const m2 = mu.filter((_, k4) => vivo[k4]); mu.length = 0; mu.push(...m2); } } }
   const ms = mu.map(() => new Uint8Array(n));
   for (const q of idx) { const c = px(q); let b = 0, bd = Infinity; mu.forEach((u, k4) => { const dd = dist(c, u); if (dd < bd) { bd = dd; b = k4; } }); ms[b][q] = 1; }
   const hex = u => '#' + u.map(v => Math.round(v).toString(16).padStart(2, '0')).join('').toUpperCase();
@@ -745,6 +755,41 @@ function capasColor(F, img, cx, cy, iw, ih, nCol) {
   const all = F.blank(); for (const c of capas) for (let q = 0; q < n; q++) if (c.m[q]) all[q] = 1;
   return { all, capas };
 }
+
+/* ---- imágenes en color en cualquier modelo ----
+   IM() sustituye a F.image(): si la imagen tiene colores, devuelve toda la figura (sin el fondo) y apunta sus colores;
+   al terminar el modelo, la capa de arriba que lleva la imagen se reparte en una pieza por color (colorear()).
+   Si la imagen es en blanco y negro o grises, todo sigue como antes (umbral). */
+const IMGC = { on: false, n: 8, regs: [], cache: new Map() };
+function IMK(F, p, cx, cy, w, h, reg = true) {
+  if (!IMGC.on || !p.img) return null; const key = [F.w, F.h, cx, cy, w, h].map(v => Math.round(v * 100)).join(',');
+  let c = IMGC.cache.get(key);
+  if (c === undefined) { c = capasColor(F, p.img, cx, cy, w, h, IMGC.n, true);
+    const crom = c.capas.some(q => { const v = [1, 3, 5].map(i => parseInt(q.hex.substr(i, 2), 16)); return Math.max(...v) - Math.min(...v) > 45; });
+    if (!crom || !c.capas.length) c = null; IMGC.cache.set(key, c); }
+  if (c && reg && !IMGC.regs.includes(c)) { c.F = F; IMGC.regs.push(c); }
+  return c;
+}
+const IM = (F, p, cx, cy, w, h) => { const c = IMK(F, p, cx, cy, w, h); return c ? c.all : F.image(p.img, cx, cy, w, h, { thr: p.umbral }); };
+const IMS = (F, p, cx, cy, w, h) => { const c = IMK(F, p, cx, cy, w, h, false); return c ? c.all : F.image(p.img, cx, cy, w, h, { thr: p.umbral }); };   /* solo silueta */
+function colorear(r) {
+  for (const c of IMGC.regs) { if (!r || !r.layers || r.F !== c.F) continue; const F = c.F, nAll = K.count(c.all); if (!nAll) continue;
+    let best = -1, bz = -1, bi = 0;
+    r.layers.forEach((Lr, i) => { if (!Lr.mask || Lr.mesh || !(Lr.z0 > 0)) return; const inter = K.count(and(Lr.mask, c.all)); if (inter < nAll * 0.3) return;
+      if (Lr.z1 > bz + 1e-6 || (Math.abs(Lr.z1 - bz) < 1e-6 && inter > bi)) { best = i; bz = Lr.z1; bi = inter; } });
+    if (best < 0) continue; const Lr = r.layers[best];
+    /* cada color dentro de la capa; los trocitos sueltos (< 1 mm²) pasan al color vecino */
+    const lim = Math.max(4, Math.round(F.res * F.res)); const ms = c.capas.map(q => { const m = and(q.m, Lr.mask); let k = F.blank(); for (const cc of K.components(F, m, lim)) k = or(k, cc); return k; });
+    let resto = and(Lr.mask, c.all); for (const m of ms) resto = sub(resto, m);
+    for (let t = 0; t < 8 && K.count(resto); t++) ms.forEach((m, i) => { const g = and(dilate(F, m, 1.01 / F.res), resto); if (K.count(g)) { ms[i] = or(m, g); resto = sub(resto, g); } });
+    const nuevas = []; const fuera = sub(Lr.mask, sub(c.all, resto)); if (K.count(fuera)) nuevas.push({ ...Lr, mask: fuera });
+    ms.forEach((m, i) => { if (K.count(m)) nuevas.push({ ...Lr, name: Lr.name + ': color ' + (i + 1), mask: m, color: c.capas[i].hex }); });
+    r.layers.splice(best, 1, ...nuevas);
+  }
+  return r;
+}
+const SOLO_SILUETA = new Set(['pet-forma', 'mp-silueta', 'cuenco']);
+const SIN_COLOR = /gResina|gCortador|gSello|gColorear|gMultipartes|gRodillo|gEyector|gLito/;
 
 /* termoformado: molde macho (cúpula + diseño) y hembra en espejo con holgura para la lámina */
 function gTermo(p) {
@@ -1002,7 +1047,7 @@ function gRascar(p) {
 function gTrofeo(p) {
   const W = p.ancho, Hf = p.alto; const f = font(p.fuente); const t = lines(p.texto, '100K'); const dt = tdim(t, f, W * 0.8); const ih = Hf - dt.h - 4; const ss = imgFit(p.img, W, ih);
   const baseW = W + 30, baseD = 34; const F = frame(baseW + 4, Hf + baseD + 30); const yTop = -(Hf + baseD + 22) / 2;
-  const sil = fillHoles(F, close(F, F.image(p.img, 0, yTop + ss.h / 2, ss.w, ss.h, { thr: p.umbral }), 2)); const det = F.image(p.img, 0, yTop + ss.h / 2, ss.w, ss.h, { thr: p.umbral });
+  const det = IM(F, p, 0, yTop + ss.h / 2, ss.w, ss.h); const sil = fillHoles(F, close(F, det, 2));
   const T = F.text(t, f, dt.s, 0, yTop + ih + 4 + dt.h / 2); const sb = bbox(F, sil); const bridge = sb ? F.rect(-Math.min(6, ss.w / 4), sb.y1 - Math.min(8, ss.h / 3), Math.min(6, ss.w / 4), yTop + ih + 4 + dt.h * 0.5, 1) : F.blank(); const bodyM = close(F, dilate(F, or(sil, T, bridge), 1.6), 3); const yb = yTop + Hf + 2; const tabW = Math.min(W * 0.5, 50);
   const fig = or(bodyM, F.rect(-tabW / 2, extreme(F, bodyM, 'bottom', -2, 2)[1] - 3, tabW / 2, yb + 7, 0.5));
   const y1 = yb + 12; const big = F.rectC(0, y1 + baseD / 2, baseW, baseD, 3), small = F.rectC(0, y1 + baseD / 2 - 3, baseW - 14, baseD - 12, 2); const slot = F.rectC(0, y1 + baseD / 2 - 7, tabW + 0.6, 4.4);
@@ -1013,7 +1058,7 @@ function gTrofeo(p) {
 /* cuenco a partir de forma o imagen */
 function gCuenco(p) {
   const S0 = p.tam, A = p.abertura; const F = frame(S0 + 2 * A + 6, S0 + 2 * A + 6, { maxPx: 520, res: 4 });
-  let S; if (p.modo === 'imagen') { const ss = imgFit(p.img, S0, S0); S = fillHoles(F, close(F, F.image(p.img, 0, 0, ss.w, ss.h, { thr: p.umbral }), 3)); S = K.open(F, S, 1); } else S = F.shape(p.forma, 0, 0, S0, S0);
+  let S; if (p.modo === 'imagen') { const ss = imgFit(p.img, S0, S0); S = fillHoles(F, close(F, IMS(F, p, 0, 0, ss.w, ss.h), 3)); S = K.open(F, S, 1); } else S = F.shape(p.forma, 0, 0, S0, S0);
   const sd = K.signedDist(F, S); const slabs = []; const dz = 0.8;
   slabs.push(mm(F, K.level(sd, -1e9, 0), 0, p.suelo));
   for (let z = p.suelo; z < p.alto - 1e-6; z += dz) { const z1 = Math.min(p.alto, z + dz); const r = A * Math.pow((z1) / p.alto, 1.5); const rg = K.level(sd, r - p.pared, r); if (K.count(rg)) slabs.push(mm(F, rg, z, z1)); }
@@ -1071,7 +1116,8 @@ function gCarrete(p) {
 function cabeza(F, p, cy, size) {
   const f = font(p.fuente); const capas = []; let sil, agujero = null;
   switch (p.cabeza) {
-    case 'imagen': { const s = imgFit(p.img, size, size); const I = F.image(p.img, 0, cy, s.w, s.h, { thr: p.umbral }); sil = fillHoles(F, close(F, I, 1.5));
+    case 'imagen': { const s = imgFit(p.img, size, size); const cI = IMK(F, p, 0, cy, s.w, s.h); const I = cI ? cI.all : F.image(p.img, 0, cy, s.w, s.h, { thr: p.umbral }); sil = fillHoles(F, close(F, I, 1.5));
+      if (cI) { capas.push({ name: 'Imagen', mask: sil, dz: 1, color: p.color2 || C.rosa }, { name: 'Imagen', mask: and(I, erode(F, sil, 0.3)), dz: 1.6, color: C.negro }); break; }
       const Lu = F.lum(p.img, 0, cy, s.w, s.h); const dark = new Uint8Array(F.n); for (let i = 0; i < F.n; i++) if (sil[i] && Lu[i] >= 0 && Lu[i] < 0.35) dark[i] = 1;
       capas.push({ name: 'Imagen', mask: sil, dz: 1, color: p.color2 || C.rosa }); if (K.count(and(dark, erode(F, sil, 0.6)))) capas.push({ name: 'Detalles', mask: and(dilate(F, dark, 0.2), erode(F, sil, 0.6)), dz: 1.6, color: C.negro }); break; }
     case 'texto': { const t = lines(p.texto, '@tumarca'); const s = fitSize(t, f, size * 0.86, size * 0.42); const T = F.text(t, f, s, 0, cy); const bb = bbox(F, T);
@@ -1177,14 +1223,16 @@ function gLlaveroImagen(p) {
   const s = imgFit(p.img, p.tam, p.tam); const tH = p.texto ? p.tam * 0.28 : 0; const F = frame(p.tam + 2 * p.borde + 14, p.tam + tH + 2 * p.borde + 18);
   const cy = -tH / 2; const Lu = F.lum(p.img, 0, cy, s.w, s.h); const n = F.n; const sil = new Uint8Array(n), mid = new Uint8Array(n), dark = new Uint8Array(n);
   for (let i = 0; i < n; i++) { const v = Lu[i]; if (v < 0) continue; if (v < 0.94) sil[i] = 1; if (v < 0.62) mid[i] = 1; if (v < 0.3) dark[i] = 1; }
-  let S = fillHoles(F, close(F, sil, 1.2)); if (imgHasAlphaSafe(p.img)) S = fillHoles(F, close(F, F.image(p.img, 0, cy, s.w, s.h, { mode: 'alpha' }), 1.2));
+  const cI = IMK(F, p, 0, cy, s.w, s.h); if (cI) sil.set(cI.all);
+  let S = fillHoles(F, close(F, sil, 1.2)); if (!cI && imgHasAlphaSafe(p.img)) S = fillHoles(F, close(F, F.image(p.img, 0, cy, s.w, s.h, { mode: 'alpha' }), 1.2));
   let T = F.blank(); if (p.texto) { const f = font(p.fuente); const t = lines(p.texto, ''); const sz = fitSize(t, f, p.tam * 1.1, tH); T = F.text(t, f, sz, 0, cy + s.h / 2 + tH / 2 + 1); }
   let base = close(F, dilate(F, or(S, T), p.borde), 2); const h = holeTab(F, base, p.agujero, p.dAg, undefined, undefined, p.movAg); base = h.base; const cl = m => h.clear ? sub(m, h.clear) : m;
   const layers = [];
   if (p.nfc) { const pocket = F.disk(0, cy, p.dNfc / 2 + 0.3); layers.push(L('Base', base, 0, 0.8, C.blanco), L('Base (hueco NFC: pausa)', sub(base, pocket), 0.8, 0.8 + p.eNfc, C.blanco), L('Base (cierre)', base, 0.8 + p.eNfc, 2.2 + p.eNfc, C.blanco)); }
   else layers.push(L('Base', base, 0, 2.4, C.blanco));
   const z = layers[layers.length - 1].z1;
-  layers.push(L('Color 1', cl(sub(S, mid)), z, z + 0.8, p.c1 || C.rosa), L('Color 2', cl(and(sub(mid, dark), S)), z, z + 1.2, p.c2 || C.rojo), L('Color 3 (oscuro)', cl(and(dark, S)), z, z + 1.6, C.negro));
+  if (cI) layers.push(L('Imagen', cl(and(cI.all, S)), z, z + 1.2, p.c1 || C.rosa));
+  else layers.push(L('Color 1', cl(sub(S, mid)), z, z + 0.8, p.c1 || C.rosa), L('Color 2', cl(and(sub(mid, dark), S)), z, z + 1.2, p.c2 || C.rojo), L('Color 3 (oscuro)', cl(and(dark, S)), z, z + 1.6, C.negro));
   if (p.texto) layers.push(L('Texto', cl(T), z, z + 1, C.negro));
   return { F, layers: layers.filter(Lr => K.count(Lr.mask)), note: (p.nfc ? 'Pausa al empezar "Base (cierre)" para meter la etiqueta NFC. ' : '') + 'Los colores salen de los tonos de la imagen (claros, medios y oscuros).' };
 }
@@ -1255,7 +1303,17 @@ function gTestRosca(p) {
 
 /* ===================================================== CATÁLOGO ===================================================== */
 const MODELS = {};
-function M(id, name, desc, params, gen, extra = {}) { MODELS[id] = { id, name, desc, params, gen, ...extra }; }
+function M(id, name, desc, params, gen, extra = {}) {
+  const ip = params.findIndex(q => q.type === 'img' && q.k === 'img');
+  if (ip >= 0 && !SIN_COLOR.test(gen.toString())) { const sh = params[ip].show, g0 = gen;
+    /* en los modelos que solo usan la silueta no hay opción: la silueta de una imagen en color sale sola */
+    if (!SOLO_SILUETA.has(id)) params = [...params.slice(0, ip + 1),
+      sel('colorImg', 'Colores de la imagen', 'color', { color: 'Detectar todos los colores', byn: 'Un solo color (umbral)' }, sh ? { show: sh } : {}),
+      cnt('nColores', 'Máximo de colores', 8, 2, 12, { show: q => (!sh || sh(q)) && q.colorImg !== 'byn' }), ...params.slice(ip + 1)];
+    gen = q => { IMGC.on = q.colorImg !== 'byn'; IMGC.n = q.nColores || 8; IMGC.regs = []; IMGC.cache = new Map();
+      try { return colorear(g0(q)); } finally { IMGC.on = false; IMGC.regs = []; IMGC.cache = new Map(); } }; }
+  MODELS[id] = { id, name, desc, params, gen, ...extra };
+}
 const UMB = num('umbral', 'Umbral de imagen', 55, 5, 95, 1, { unit: '%' });
 const NOMBRE_BASE = [txt('texto', 'Texto', 'Maria'), fnt(), num('ancho', 'Ancho del texto', 55, 25, 140), num('borde', 'Contorno', 2.5, 1, 6), num('hBase', 'Grosor base', 3, 1.5, 6), num('hTexto', 'Relieve del texto', 1.2, 0.4, 4, 0.2)];
 const PLACA = (o = {}) => [
