@@ -414,7 +414,9 @@ function gLetra(p, o = {}) {
     case 'lampara': { const eb = extreme(F, erode(F, Lm, pw + 3.2), 'bottom'); layers.push(L('Trasera (agujero para cable)', sub(Lm, F.disk(eb[0], eb[1] - 0.5, 2.6)), 0, 1.6, C.rosa), L('Paredes', ring(F, Lm, pw), 1.6, g, C.rosa), L('Difusor (blanco)', shift(F, erode(F, Lm, 0), Wl + 8, 0), 0, 1.2, C.translucido)); break; }
     default: layers.push(L('Suelo', Lm, 0, su, C.oro), L('Paredes', ring(F, Lm, pw), su, g, C.marron));
   }
-  if (hasN && p.unido && !lamp) { const Tn = F.text(tn, fn, dn.s * 0.9, lx + Wl * 0.08, -(p.posNombre ?? 0) / 100 * p.alto);   /* por defecto, a media altura de la letra (antes iba abajo); positivo = más arriba */ layers.push(L('Nombre: contorno', close(F, dilate(F, Tn, 1.3), 1), 0, g + 1.2, C.blanco), L('Nombre', Tn, g + 1.2, g + 2.6, C.rosa)); return { F, layers, note: 'El nombre va unido a la letra: se imprime tumbada, de una pieza.' }; }
+  if (hasN && p.unido && !lamp) { const Tn = F.text(tn, fn, dn.s * 0.9, lx + Wl * 0.08, -(p.posNombre ?? -20) / 100 * p.alto);   /* positivo = más arriba */
+    /* el contorno del nombre no sale desde la cama: empieza a mitad del grosor de la letra (ajustable) */
+    const z0n = Math.max(0, Math.min(0.9, (p.zNombre ?? 50) / 100)) * g; layers.push(L('Nombre: contorno', close(F, dilate(F, Tn, 1.3), 1), z0n, g + 1.2, C.blanco), L('Nombre', Tn, g + 1.2, g + 2.6, C.rosa)); return { F, layers, note: 'El nombre va unido a la letra: se imprime tumbada, de una pieza.' + (z0n > 0 ? ' Las partes del nombre que sobresalen de la letra quedan en el aire: activa soportes (solo en la placa) al laminar.' : '') }; }
   if (hasN) { const Tn = F.text(tn, fn, dn.s, nx, 0); layers.push(L('Nombre: base', close(F, dilate(F, Tn, 1.4), 1), 0, 2, C.blanco), L('Nombre', Tn, 2, 3.4, C.rosa)); }
   return { F, layers, note: o.v === 'hundido' ? '' : (hasN ? 'El nombre se imprime aparte y se pega delante de la letra.' : '') };
 }
@@ -1385,7 +1387,7 @@ M('sa-social', 'String art: @usuario', 'Cápsula alargada con tu @.', [...STR.ma
 // Letra grande
 const LETRA = (o = {}) => [txt('letra', 'Letra', o.letra || 'M'), fnt('fuenteLetra', 'Fuente de la letra', 'anton'), num('alto', 'Alto de la letra', 100, 40, 220), num('grosor', 'Grosor / profundidad', o.grosor || 20, 5, 60),
   ...(o.paredes ? [num('pared', 'Pared', 2, 1.2, 4, 0.2), num('suelo', 'Suelo', 1.6, 1, 4, 0.2)] : []), ...(o.patron ? [pat(o.patron), num('sep', 'Separación', 4, 2, 12), num('grosorLinea', 'Grosor línea', 1, 0.6, 3, 0.1)] : []),
-  txt('nombre', 'Nombre', o.nombre ?? 'mom'), fnt('fuente', 'Fuente del nombre', 'pacifico'), ...(o.unible ? [chk('unido', 'Nombre unido a la letra (una sola pieza)', true), num('posNombre', 'Altura del nombre (0 = mitad de la letra)', 0, -40, 40, 5, { unit: '%', show: p => p.unido })] : [])];
+  txt('nombre', 'Nombre', o.nombre ?? 'mom'), fnt('fuente', 'Fuente del nombre', 'pacifico'), ...(o.unible ? [chk('unido', 'Nombre unido a la letra (una sola pieza)', true), num('zNombre', 'El nombre empieza a (del grosor de la letra)', 50, 0, 90, 5, { unit: '%', show: p => p.unido }), num('posNombre', 'Subir / bajar el nombre', -20, -40, 40, 5, { unit: '%', show: p => p.unido })] : [])];
 M('letra-nombre', 'Letra grande con nombre', 'Letra maciza con el nombre unido o aparte.', LETRA({ nombre: 'elisa', unible: true }), p => gLetra(p, { v: 'maciza' }));
 M('letra-hundido', 'Letra grande con nombre incrustado', 'El nombre va incrustado a ras en otro color.', [...LETRA({ nombre: 'rafael' }), chk('vertical', 'Nombre en vertical', true)], p => gLetra(p, { v: 'hundido' }));
 M('letra-resina', 'Letra grande con borde (resina / brillo)', 'Letra hueca con paredes para rellenar.', LETRA({ paredes: true, nombre: 'aline', grosor: 12, unible: true }), p => gLetra(p, { v: 'resina' }));
