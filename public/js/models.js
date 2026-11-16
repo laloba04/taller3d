@@ -818,7 +818,7 @@ function gTermo(p) {
   /* los remaches y la ranura del clip tienen que caer en la pestaña plana (no en la curva): pestaña más ancha */
   const conClip = p.malla && p.trasera !== 'no' && cierre === 'rosca';
   const pestana = remaches ? Math.max(p.pestana ?? 2, 7) : (p.pestana ?? 2);   /* la ranura del clip va en una orejita propia, no ensancha todo el borde */
-  const escalon = pestana + 1, paredH = 4, padP = plano ? escalon + paredH : 0, guias = p.guias && !plano;
+  const escalon = pestana + (p.holgEscalon ?? 1), paredH = p.paredMolde ?? 4, sueloCav = p.sueloCav ?? 1.2, padP = plano ? escalon + paredH : 0, guias = p.guias && !plano;
   const F = frame(W + 2 * t + 4 + 2 * padP, Hs + 2 * t + 4 + 2 * padP, { margin: guias ? 13 : 5, maxPx: Math.min(340, K.QUALITY.maxPx), res: Math.min(4, K.QUALITY.res) });
   let S;
   if (sigue) S = silueta(F).S;
@@ -857,15 +857,15 @@ function gTermo(p) {
   if (two) {
     const St = dilate(F, S, t); const ht = tray ? dome(St, R + t, t * 0.4) : dome(St, R + t); const Dt = sign > 0 ? dilate(F, D, t * 0.5) : erode(F, D, Math.min(t * 0.5, 0.4)); const et = emb(Dt);
     const Hb = Math.max(base + H + E + 3, pinH + 4); const fem = new Float32Array(n);
-    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const src = j * w + (w - 1 - i); const depth = St[src] ? Math.max(0, ht[src] + sign * et[src]) : 0; fem[j * w + i] = Math.max(1.2, Hb - depth); }
-    if (pins) { const ph = dilate(F, pins, 0.35); for (let i = 0; i < n; i++) if (ph[i]) fem[i] = Math.max(1.2, Hb - pinH - 0.6); }
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const src = j * w + (w - 1 - i); const depth = St[src] ? Math.max(0, ht[src] + sign * et[src]) : 0; fem[j * w + i] = Math.max(sueloCav, Hb - depth); }
+    if (pins) { const ph = dilate(F, pins, 0.35); for (let i = 0; i < n; i++) if (ph[i]) fem[i] = Math.max(sueloCav, Hb - pinH - 0.6); }
     /* canal en la hembra para que no aplaste la boquilla al prensar la malla (en espejo, como la hembra) */
     if (rosca) { /* más ancho que la base maciza de la boquilla (R + 1,5 por lado) con holgura, y más hondo, para que entre sin forzar */
       const hc = ROSCA.R + 1.5 + (p.holgCanal ?? 1.5); const c = F.rect(-cuelloXY[0] - hc, cuelloXY[1] - ROSCA.L - 30, -cuelloXY[0] + hc, cuelloXY[1] + 6, 1.5);
-      for (let i = 0; i < n; i++) if (c[i]) fem[i] = Math.max(1.2, Math.min(fem[i], Hb - ROSCA.R - 2)); }
+      for (let i = 0; i < n; i++) if (c[i]) fem[i] = Math.max(sueloCav, Math.min(fem[i], Hb - ROSCA.R - 2)); }
     if (plano) { /* escalón del grosor de la malla donde apoya su borde plano, y pared alrededor siguiendo la forma */
       const esc = K.mirrorTo(F, sub(dilate(F, St, escalon), St), 0, 0), fuera = K.mirrorTo(F, dilate(F, St, escalon + paredH), 0, 0);
-      for (let i = 0; i < n; i++) if (esc[i]) fem[i] = Math.max(1.2, Math.min(fem[i], Hb - (p.malla ? p.eMalla : t)));
+      for (let i = 0; i < n; i++) if (esc[i]) fem[i] = Math.max(sueloCav, Math.min(fem[i], Hb - (p.malla ? p.eMalla : t)));
       parts.push(LM('Molde hembra (en espejo)', K.translateMesh(K.maskHeightMesh(F, fuera, k => fem[k], 0), off2, 0), colMoldes || C.rosa)); }
     else parts.push(LM('Molde hembra (en espejo)', mesh(fem, off), colMoldes || C.rosa));
   }
@@ -1526,7 +1526,9 @@ const TERMO = (o = {}) => [{ ...shp(o.forma || 'corazon', ['corazon', 'circulo',
   num('holgCanal', 'Holgura del hueco de la boquilla en el molde', 1.5, 0.5, 4, 0.25, { show: p => p.malla && p.trasera !== 'no' && p.cierre === 'rosca' }),
   sel('disenoTras', 'Dibujo en la malla trasera', 'no', { no: 'Ninguno (liso)', texto: 'Un texto' }, { show: p => p.malla && p.trasera !== 'no' }),
   area('textoTras', 'Texto de la trasera', 'Con cariño', { show: p => p.malla && p.trasera !== 'no' && p.disenoTras === 'texto' }),
-  sel('colMalla', 'Color de las mallas', 'rojo', COLS, { show: p => p.malla }), sel('colCierre', 'Color de la tuerca y el clip', 'auto', { auto: 'Por defecto', ...COLS }, { show: p => p.malla && p.trasera !== 'no' }), sel('colMoldes', 'Color de los moldes', 'auto', { auto: 'Por defecto', ...COLS })];
+  sel('colMalla', 'Color de las mallas', 'rojo', COLS, { show: p => p.malla }), sel('colCierre', 'Color de la tuerca y el clip', 'auto', { auto: 'Por defecto', ...COLS }, { show: p => p.malla && p.trasera !== 'no' }), sel('colMoldes', 'Color de los moldes', 'auto', { auto: 'Por defecto', ...COLS }),
+  num('paredMolde', 'Pared de la bandeja del molde', 4, 2, 10, 0.5, { show: p => p.molde !== 'bloque' && p.piezas === 'ambas' }), num('sueloCav', 'Suelo de la cavidad del molde', 1.2, 0.6, 3, 0.1, { show: p => p.piezas === 'ambas' }),
+  num('holgEscalon', 'Holgura del borde en el escalón del molde', 1, 0.2, 3, 0.1, { show: p => p.molde !== 'bloque' && p.piezas === 'ambas' })];
 M('termo', 'Generador de termoformado', 'Cualquier forma, en cúpula acolchada o en bandeja, con texto, imagen o copo.', TERMO({ texto: 'Mamá', forma: 'corazon', eva: 1, anilla: true }), p => gTermo(p));
 M('termo-nav', 'Molde de termoformado navideño', 'Bolsita de malla de dos caras con mensaje de Navidad, y sus moldes.', TERMO({ texto: 'Feliz\nNavidad', forma: 'corazon', eva: 1, anilla: true }), p => gTermo(p));
 M('termo-copo', 'Molde de termoformado: copo', 'Bolsita de malla con un copo de nieve, y sus moldes.', TERMO({ forma: 'flor', diseno: 'copo', texto: '', eva: 1, anilla: true }), p => gTermo(p));

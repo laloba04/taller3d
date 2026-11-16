@@ -91,7 +91,7 @@ def main():
         # opciones que no son las de por defecto: texto en la trasera, colores por parte, nombre unido en letra incrustada y lámpara, y un 3MF por placa
         extra = page.evaluate("""async () => { const E = __T3D.Engine, out = [];
           const casos = [['termo', { disenoTras: 'texto', textoTras: 'Con cariño', colMalla: 'azul', colCierre: 'negro', colMoldes: 'gris' }], ['termo', { disenoTras: 'texto', textoTras: 'Hola', disenoMalla: 'malla', cierre: 'remaches' }],
-            ['letra-hundido', { unido: true }], ['letra-lampara', { unido: true }], ['letra-lampara', { unido: true, zNombre: 0 }]];
+            ['termo', { paredMolde: 7, sueloCav: 2, holgEscalon: 2 }], ['letra-hundido', { unido: true }], ['letra-lampara', { unido: true }], ['letra-lampara', { unido: true, zNombre: 0 }]];
           for (const [id, ov] of casos) { const m = CAT.MODELS[id]; const v = { ...__T3D.defaults(m), ...ov };
             try { const res = await E.gen(m, v); const chk = await E.run('check', null, null, { parts: res.parts.map(p => ({ name: p.name, mesh: { pos: p.mesh.pos, idx: p.mesh.idx } })) });
               out.push({ id, ov: JSON.stringify(ov), parts: res.parts.map(p => p.name), plates: [...new Set(res.parts.map(p => p.plate).filter(Boolean))], bad: chk.filter(c => c.ok === false).map(c => c.name + ': ' + c.status) });
