@@ -217,7 +217,7 @@ async function download() {
     const v = vals(m); const tag = String(v.texto || v.nombre || v.usuario || v.letra || '').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').slice(0, 24);
     const base = m.id + (tag ? '-' + tag : '');
     const readme = `${m.name}\nGenerado con Taller 3D.\n\n${base}.3mf: cada capa es una pieza con su color (asígnale filamento en el laminador).\n${base}.stl: {STL}\n\nPiezas:\n` + r.parts.map(p => `- ${p.name}${p.z1 !== undefined ? ` (z ${p.z0}–${p.z1} mm)` : ''}`).join('\n') + '\n';
-    const { blob } = await Engine.zip({ parts: partsColocadas(r.parts).map(p => ({ name: p.name, color: p.color, mesh: p.mesh })), title: m.name, base, readme });
+    const { blob } = await Engine.zip({ parts: partsColocadas(r.parts).map(p => ({ name: p.name, color: p.color, mesh: p.mesh, plate: p.plate })), title: m.name, base, readme });
     $('#dl-msg').textContent = await saveFile(base + '.zip', blob);
   } catch (e) { console.error(e); $('#dl-msg').textContent = 'Error al crear los archivos: ' + (e.message || e); }
   btn.disabled = false;

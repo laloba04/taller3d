@@ -21,7 +21,7 @@ const STAND = (def = true) => chk('peana', 'Incluir peana (soporte con ranura)',
 /* ---------- utilidades ---------- */
 const lines = (s, d) => { const a = String(s ?? '').split('\n').map(t => t.trim()).filter(Boolean); return a.length ? a : [d]; };
 const L = (name, mask, z0, z1, color) => ({ name, mask, z0, z1, color });
-const LM = (name, mesh, color) => ({ name, mesh, color });
+const LM = (name, mesh, color, plate) => ({ name, mesh, color, ...(plate ? { plate } : {}) });
 function tdim(t, f, width, lh) { const m = measure(t, f, lh); const s = width / m.w; return { s, w: width, h: m.h * s }; }
 function imgFit(im, maxW, maxH) { const r = (im.width || 1) / (im.height || 1); let w = maxW, h = maxW / r; if (h > maxH) { h = maxH; w = maxH * r; } return { w, h }; }
 /* anilla en una pestaña por fuera del borde: el agujero no recorta la figura.
@@ -398,7 +398,7 @@ function gString(p, o = {}) {
 /* letra grande */
 function gLetra(p, o = {}) {
   const fl = font(p.fuenteLetra); const ch = String(p.letra || 'M').trim().slice(0, 2) || 'M'; const m = measure([ch], fl); const s = p.alto / m.h; const Wl = m.w * s;
-  const fn = font(p.fuente); const tn = lines(p.nombre, ''); const hasN = !!p.nombre && o.v !== 'hundido';
+  const fn = font(p.fuente); const tn = lines(p.nombre, ''); const hasN = !!p.nombre && (o.v !== 'hundido' || !!p.unido);
   const dn = hasN ? tdim(tn, fn, Wl * 1.25) : null;
   const lamp = o.v === 'lampara';
   const extraW = (hasN ? dn.w + 10 : 0) + (lamp ? Wl + 8 : 0);
@@ -408,13 +408,14 @@ function gLetra(p, o = {}) {
   const nx = lx + Wl / 2 + 5 + (hasN ? dn.w / 2 : 0) + (lamp ? Wl + 8 : 0);
   switch (o.v) {
     case 'maciza': layers.push(L('Letra', Lm, 0, g, C.verde)); break;
-    case 'hundido': { const nm = lines(p.nombre, 'rafael'); const s2 = p.vertical ? fitSize(nm, fn, p.alto * 0.85, Wl * 0.3) : fitSize(nm, fn, Wl * 0.9, p.alto * 0.25); const Tn = and(F.text(nm, fn, s2, lx, p.vertical ? 0 : p.alto * 0.12, { rot: p.vertical ? -Math.PI / 2 : 0 }), erode(F, Lm, 1.2)); layers.push(L('Letra', Lm, 0, g - 1.2, C.verde), L('Letra (cara)', sub(Lm, Tn), g - 1.2, g, C.verde), L('Nombre incrustado', Tn, g - 1.2, g, C.blanco)); break; }
+    case 'hundido': { if (p.unido) { layers.push(L('Letra', Lm, 0, g, C.verde)); break; }   /* nombre unido: no se incrusta, va por encima y unido */
+      const nm = lines(p.nombre, 'rafael'); const s2 = p.vertical ? fitSize(nm, fn, p.alto * 0.85, Wl * 0.3) : fitSize(nm, fn, Wl * 0.9, p.alto * 0.25); const Tn = and(F.text(nm, fn, s2, lx, p.vertical ? 0 : p.alto * 0.12, { rot: p.vertical ? -Math.PI / 2 : 0 }), erode(F, Lm, 1.2)); layers.push(L('Letra', Lm, 0, g - 1.2, C.verde), L('Letra (cara)', sub(Lm, Tn), g - 1.2, g, C.verde), L('Nombre incrustado', Tn, g - 1.2, g, C.blanco)); break; }
     case 'textura': { const inn = erode(F, Lm, 1.6); const pt = and(F.pattern(p.patron, p.sep, p.grosorLinea), inn); layers.push(L('Letra', Lm, 0, g - 1, C.azul), L('Borde', ring(F, Lm, 1.6), g - 1, g, C.azul), L('Textura', pt, g - 1, g, C.celeste)); break; }
     case 'fondo': { const inn = erode(F, Lm, pw); const pt = and(F.pattern(p.patron, p.sep, p.grosorLinea), inn); layers.push(L('Suelo', Lm, 0, su, C.verde), L('Paredes', ring(F, Lm, pw), su, g, C.verde), L('Relieve del fondo', pt, su, su + 1.2, C.oro)); break; }
     case 'lampara': { const eb = extreme(F, erode(F, Lm, pw + 3.2), 'bottom'); layers.push(L('Trasera (agujero para cable)', sub(Lm, F.disk(eb[0], eb[1] - 0.5, 2.6)), 0, 1.6, C.rosa), L('Paredes', ring(F, Lm, pw), 1.6, g, C.rosa), L('Difusor (blanco)', shift(F, erode(F, Lm, 0), Wl + 8, 0), 0, 1.2, C.translucido)); break; }
     default: layers.push(L('Suelo', Lm, 0, su, C.oro), L('Paredes', ring(F, Lm, pw), su, g, C.marron));
   }
-  if (hasN && p.unido && !lamp) { const Tn = F.text(tn, fn, dn.s * 0.9, lx + Wl * 0.08, -(p.posNombre ?? -20) / 100 * p.alto);   /* positivo = más arriba */
+  if (hasN && p.unido) { const Tn = F.text(tn, fn, dn.s * 0.9, lx + Wl * 0.08, -(p.posNombre ?? -20) / 100 * p.alto);   /* positivo = más arriba */
     /* el contorno del nombre no sale desde la cama: empieza a mitad del grosor de la letra (ajustable) */
     const z0n = Math.max(0, Math.min(0.9, (p.zNombre ?? 50) / 100)) * g; layers.push(L('Nombre: contorno', close(F, dilate(F, Tn, 1.3), 1), z0n, g + 1.2, C.blanco), L('Nombre', Tn, g + 1.2, g + 2.6, C.rosa)); return { F, layers, note: 'El nombre va unido a la letra: se imprime tumbada, de una pieza.' + (z0n > 0 ? ' Las partes del nombre que sobresalen de la letra quedan en el aire: activa soportes (solo en la placa) al laminar.' : '') }; }
   if (hasN) { const Tn = F.text(tn, fn, dn.s, nx, 0); layers.push(L('Nombre: base', close(F, dilate(F, Tn, 1.4), 1), 0, 2, C.blanco), L('Nombre', Tn, 2, 3.4, C.rosa)); }
@@ -802,6 +803,8 @@ const SIN_COLOR = /gResina|gCortador|gSello|gColorear|gMultipartes|gRodillo|gEye
 function gTermo(p) {
   /* con diseño de imagen, la forma puede ser la silueta de la propia imagen (más un margen) */
   const sigue = p.diseno === 'imagen' && p.formaImg !== false && p.imgD, mg = p.margenImg ?? 3;
+  /* colores por parte (la malla, el cierre y los moldes) */
+  const colM = C[p.colMalla] || C.rojo, colCierre = C[p.colCierre], colMoldes = C[p.colMoldes];
   /* con la forma de la silueta, el tamaño del dibujo agranda la imagen y la figura con ella */
   const si = sigue ? imgFit(p.imgD, p.tam * (p.tamDiseno ?? 100) / 100, p.tam * (p.tamDiseno ?? 100) / 100) : null;
   const W = sigue ? si.w + 2 * mg : p.tam, Hs = sigue ? si.h + 2 * mg : (p.forma === 'cuadrado' || p.forma === 'circulo' || p.forma === 'flor') ? W : W * (p.forma === 'ovalo' ? 0.7 : 1);
@@ -850,7 +853,7 @@ function gTermo(p) {
   const mesh = (arr, dx) => { const m = K.heightMesh(arr, w, h, step); for (let k = 0; k < m.pos.length; k += 3) m.pos[k] += dx; K.fixOrientation(m); return m; };
   const two = p.piezas === 'ambas';
   const off2 = plano ? F.W / 2 + 2 : off;
-  parts.push(LM('Molde macho', plano ? K.translateMesh(K.maskHeightMesh(F, S, k => male[k] - base + Math.max(1, p.grosorMacho ?? 2), 0) /* placa del macho con su propio grosor (ajustable) */, two ? -off2 : 0, 0) : mesh(male, two ? -off : 0), C.azul));
+  parts.push(LM('Molde macho', plano ? K.translateMesh(K.maskHeightMesh(F, S, k => male[k] - base + Math.max(1, p.grosorMacho ?? 2), 0) /* placa del macho con su propio grosor (ajustable) */, two ? -off2 : 0, 0) : mesh(male, two ? -off : 0), colMoldes || C.azul));
   if (two) {
     const St = dilate(F, S, t); const ht = tray ? dome(St, R + t, t * 0.4) : dome(St, R + t); const Dt = sign > 0 ? dilate(F, D, t * 0.5) : erode(F, D, Math.min(t * 0.5, 0.4)); const et = emb(Dt);
     const Hb = Math.max(base + H + E + 3, pinH + 4); const fem = new Float32Array(n);
@@ -863,8 +866,8 @@ function gTermo(p) {
     if (plano) { /* escalón del grosor de la malla donde apoya su borde plano, y pared alrededor siguiendo la forma */
       const esc = K.mirrorTo(F, sub(dilate(F, St, escalon), St), 0, 0), fuera = K.mirrorTo(F, dilate(F, St, escalon + paredH), 0, 0);
       for (let i = 0; i < n; i++) if (esc[i]) fem[i] = Math.max(1.2, Math.min(fem[i], Hb - (p.malla ? p.eMalla : t)));
-      parts.push(LM('Molde hembra (en espejo)', K.translateMesh(K.maskHeightMesh(F, fuera, k => fem[k], 0), off2, 0), C.rosa)); }
-    else parts.push(LM('Molde hembra (en espejo)', mesh(fem, off), C.rosa));
+      parts.push(LM('Molde hembra (en espejo)', K.translateMesh(K.maskHeightMesh(F, fuera, k => fem[k], 0), off2, 0), colMoldes || C.rosa)); }
+    else parts.push(LM('Molde hembra (en espejo)', mesh(fem, off), colMoldes || C.rosa));
   }
   if (p.malla) {
     const G = frame(W + 2 * extra + 6, Hs + 2 * extra + 6 + (conClip ? 16 : 0), { margin: 4, maxPx: Math.min(900, K.QUALITY.maxPx), res: Math.min(4, K.QUALITY.res) });
@@ -918,8 +921,8 @@ function gTermo(p) {
       bq = { del: K.solidMesh(K.keep(cr.delantera.translate([nx + dxF, y0 + dy, 0]))), tras: K.solidMesh(K.keep(cr.trasera.translate([-nx + dxB, y0 + dy, 0]))),
         tapon: K.solidMesh(K.keep(cr.tapon.translate([-12, yc, 0]))), pinzas: K.solidMesh(K.keep(cr.pinza.translate([4, yc - 5, 0]))) };
     }
-    const conBoquilla = (nombre, malla, b) => { const u = b && K.unionMeshes([malla, b]); if (u) return [LM(nombre + ' (con boquilla)', u, p.colorMalla || C.rojo)];
-      return b ? [LM(nombre, malla, p.colorMalla || C.rojo), LM('Boquilla de ' + nombre.toLowerCase(), b, p.colorMalla || C.rojo)] : [LM(nombre, malla, p.colorMalla || C.rojo)]; };
+    const conBoquilla = (nombre, malla, b) => { const u = b && K.unionMeshes([malla, b]); if (u) return [LM(nombre + ' (con boquilla)', u, colM)];
+      return b ? [LM(nombre, malla, colM), LM('Boquilla de ' + nombre.toLowerCase(), b, colM)] : [LM(nombre, malla, colM)]; };
     /* el dibujo se apoya en una capa fina del color de la malla (la primera capa) que lo une a ella por toda su superficie;
        antes solo tocaba la malla por los lados y se soltaba al despegarlo de la cama. Se ve por arriba, donde el texto se lee al derecho */
     /* cierre de abajo (con la rosca): en las dos mallas, una zona maciza en el borde con una ranura en el mismo sitio;
@@ -941,21 +944,34 @@ function gTermo(p) {
     parts.push(...conBoquilla('Malla delantera', mallaF, bq && bq.del));
     if (capas) capas.forEach((c, i) => { const m = and(c.m, dMask); if (K.count(m)) parts.push(LM('Malla delantera: color ' + (i + 1), mm(G, m, ancla, p.eMalla, dxF, dy), c.hex)); });
     else if (K.count(D2)) parts.push(LM('Malla delantera: diseño', mm(G, dMask, ancla, p.eMalla, dxF, dy), C.blanco));
-    if (two2) { if (K.count(pins)) parts.push(LM('Pivotes de cierre', mm(G, pins, p.eMalla, p.eMalla + 2, dxF, dy), p.colorMalla || C.rojo));
+    if (two2) { if (K.count(pins)) parts.push(LM('Pivotes de cierre', mm(G, pins, p.eMalla, p.eMalla + 2, dxF, dy), colM));
       /* la trasera es la misma figura en espejo: se voltea la malla 3D (exacto), no la máscara (el volteo de píxeles dejaba aristas sueltas) */
-      const backU = sub(or(and(lat, flat), solid, base, oreja), boca, agujeros, agOreja, dilate(G, pins, 0.2));
-      const mB = mmOk(backU, 0, p.eMalla, 0, 0); for (let q = 0; q < mB.pos.length; q += 3) mB.pos[q] = -mB.pos[q]; K.fixOrientation(mB);
+      let backU = sub(or(and(lat, flat), solid, base, oreja), boca, agujeros, agOreja, dilate(G, pins, 0.2));
+      /* dibujo propio en la trasera (un texto): se hace en el mismo sistema que la delantera y se voltea con la malla, así se lee bien al darle la vuelta */
+      let dTras = null; const txT = p.disenoTras === 'texto' ? lines(p.textoTras, '') : [];
+      if (txT.length) { const fT = font(p.fuente); const szT = fitSize(txT, fT, W * 0.62, Hs * 0.4, 1.05);
+        let T2 = G.text(txT, fT, szT, 0, 0, { lh: 1.05, bold: 0.5 }); T2 = sub(and(T2, erode(G, flat, p.bordeMalla + 1)), zona);
+        if (K.count(T2)) { const rr = (p.minDiseno ?? 1.4) / 2; const fino = sub(T2, K.open(G, T2, rr)); T2 = and(or(T2, dilate(G, fino, rr * 0.8)), erode(G, flat, p.bordeMalla + 1)); T2 = sub(T2, zona);
+          dTras = sub(p.disenoMalla === 'macizo' ? T2 : or(and(lat, T2), ring(G, T2, 0.6)), solid, zona); backU = sub(backU, T2); } }
+      let mB = mmOk(backU, 0, p.eMalla, 0, 0);
+      let capaT = null;
+      if (dTras && K.count(dTras)) { if (ancla) { const capa = mm(G, dTras, 0, ancla, 0, 0); mB = K.unionMeshes([mB, capa]) || K.mergeMeshes([mB, capa]); }
+        capaT = mm(G, dTras, ancla, p.eMalla, 0, 0); for (let q = 0; q < capaT.pos.length; q += 3) capaT.pos[q] = -capaT.pos[q]; K.fixOrientation(capaT); capaT = K.translateMesh(capaT, dxB, dy); }
+      for (let q = 0; q < mB.pos.length; q += 3) mB.pos[q] = -mB.pos[q]; K.fixOrientation(mB);
       const back = K.translateMesh(mB, dxB, dy);
-      parts.push(...conBoquilla('Malla trasera (en espejo)', back, bq && bq.tras)); }
-    if (clip) { const yc = dy - G.H / 2 - 14; parts.push(LM('Pinza de cierre', K.solidMesh(K.keep(clipCierre(p.eMalla, 9).translate([6, yc, 0]))), C.rosa)); }
+      parts.push(...conBoquilla('Malla trasera (en espejo)', back, bq && bq.tras));
+      if (capaT) parts.push(LM('Malla trasera: texto', capaT, C.blanco)); }
+    if (clip) { const yc = dy - G.H / 2 - 14; parts.push(LM('Pinza de cierre', K.solidMesh(K.keep(clipCierre(p.eMalla, 9).translate([6, yc, 0]))), colCierre || C.rosa)); }
     if (remaches && ptsR.length && K.hasCSG()) { const rm = remache(p.eMalla, p.holgRem ?? 0.1); const yc = dy - G.H / 2 - 6, sep = 2 * REM.rc + 3, x0 = -(ptsR.length - 1) * sep / 2;
       const fila = (s3, y) => K.union(ptsR.map((_, i) => K.keep(s3.translate([x0 + i * sep, y, 0]))));
-      parts.push(LM('Remaches: pines', K.solidMesh(fila(rm.pin, yc)), C.negro), LM('Remaches: tapitas', K.solidMesh(fila(rm.tapa, yc - sep)), C.negro)); }
+      parts.push(LM('Remaches: pines', K.solidMesh(fila(rm.pin, yc)), colCierre || C.negro), LM('Remaches: tapitas', K.solidMesh(fila(rm.tapa, yc - sep)), colCierre || C.negro)); }
     if (bq) {
-      parts.push(LM('Tapón de rosca', bq.tapon, C.blanco));
+      parts.push(LM('Tapón de rosca', bq.tapon, colCierre || C.blanco));
     }
   }
-  return { layers: parts, note: (p.malla ? 'Imprime las mallas en plano. Calienta cada una (pistola de calor o agua muy caliente) y presiónala entre el macho y la hembra; la trasera sale en espejo, así que se pone en el molde dada la vuelta. ' + (remaches ? 'Junta las dos mallas por la pestaña haciendo coincidir los agujeros, mete las chuches, pasa un pin por cada agujero y presiona su tapita hasta que quede firme (si entra floja o no entra, cambia el ajuste del remache). Imprime los remaches a 0,12–0,16 mm. ' : rosca ? 'Junta las dos mallas por el borde: las medias boquillas forman una boquilla con rosca; mete las chuches por ella, enrosca el tapón arriba (su aro sirve para colgarlo con una cinta) y abajo mete el puente de la pinza por las dos ranuras, con una pata por cada cara, y apriétala con un alicate hasta que el gancho haga clic por debajo del borde; para abrirla, empuja el gancho hacia fuera. Imprime tapón y pinza a 0,16 mm. ' : p.malla && p.trasera !== 'no' && p.cierre !== 'no' ? 'Después une las dos por el borde encajando los pivotes. ' : '') : '') + 'Calienta la lámina (EVA o goma) y présala entre el macho y la hembra dada la vuelta. El grosor de lámina ajusta la holgura.' + (guias ? ' Recorta la lámina para que no tape los cuatro pivotes de las esquinas.' : '') };
+  /* cada pieza sabe en qué placa va: las mallas juntas, la tuerca y el clip juntos y cada molde en la suya */
+  parts.forEach(q => { q.plate = /^Molde macho/.test(q.name) ? 'molde-macho' : /^Molde/.test(q.name) ? 'molde-hembra' : /^(Tapón|Pinza|Remaches|Pivotes)/.test(q.name) ? 'tuerca-y-clip' : 'mallas'; });
+  return { layers: parts, note: (p.malla ? 'Imprime las mallas en plano. Calienta cada una (pistola de calor o agua muy caliente) y presiónala entre el macho y la hembra; la trasera sale en espejo, así que se pone en el molde dada la vuelta. ' + (remaches ? 'Junta las dos mallas por la pestaña haciendo coincidir los agujeros, mete las chuches, pasa un pin por cada agujero y presiona su tapita hasta que quede firme (si entra floja o no entra, cambia el ajuste del remache). Imprime los remaches a 0,12–0,16 mm. ' : rosca ? 'Junta las dos mallas por el borde: las medias boquillas forman una boquilla con rosca; mete las chuches por ella, enrosca el tapón arriba (su aro sirve para colgarlo con una cinta) y abajo mete el puente de la pinza por las dos ranuras, con una pata por cada cara, y apriétala con un alicate hasta que el gancho haga clic por debajo del borde; para abrirla, empuja el gancho hacia fuera. Imprime tapón y pinza a 0,16 mm. ' : p.malla && p.trasera !== 'no' && p.cierre !== 'no' ? 'Después une las dos por el borde encajando los pivotes. ' : '') : '') + 'Calienta la lámina (EVA o goma) y présala entre el macho y la hembra dada la vuelta. El grosor de lámina ajusta la holgura. Moldes mejor en PETG (aguanta el calor), capas de 0,28 mm y 10 % de relleno. En el ZIP, la carpeta «placas» trae un 3MF para cada placa: mallas, tuerca y clip, y cada molde.' + (guias ? ' Recorta la lámina para que no tape los cuatro pivotes de las esquinas.' : '') };
 }
 
 
@@ -1387,14 +1403,14 @@ M('sa-social', 'String art: @usuario', 'Cápsula alargada con tu @.', [...STR.ma
 // Letra grande
 const LETRA = (o = {}) => [txt('letra', 'Letra', o.letra || 'M'), fnt('fuenteLetra', 'Fuente de la letra', 'anton'), num('alto', 'Alto de la letra', 100, 40, 220), num('grosor', 'Grosor / profundidad', o.grosor || 20, 5, 60),
   ...(o.paredes ? [num('pared', 'Pared', 2, 1.2, 4, 0.2), num('suelo', 'Suelo', 1.6, 1, 4, 0.2)] : []), ...(o.patron ? [pat(o.patron), num('sep', 'Separación', 4, 2, 12), num('grosorLinea', 'Grosor línea', 1, 0.6, 3, 0.1)] : []),
-  txt('nombre', 'Nombre', o.nombre ?? 'mom'), fnt('fuente', 'Fuente del nombre', 'pacifico'), ...(o.unible ? [chk('unido', 'Nombre unido a la letra (una sola pieza)', true), num('zNombre', 'El nombre empieza a (del grosor de la letra)', 50, 0, 90, 5, { unit: '%', show: p => p.unido }), num('posNombre', 'Subir / bajar el nombre', -20, -40, 40, 5, { unit: '%', show: p => p.unido })] : [])];
+  txt('nombre', 'Nombre', o.nombre ?? 'mom'), fnt('fuente', 'Fuente del nombre', 'pacifico'), ...(o.unible ? [chk('unido', 'Nombre unido a la letra (una sola pieza)', o.unidoDef ?? true), num('zNombre', 'El nombre empieza a (del grosor de la letra)', 50, 0, 90, 5, { unit: '%', show: p => p.unido }), num('posNombre', 'Subir / bajar el nombre', -20, -40, 40, 5, { unit: '%', show: p => p.unido })] : [])];
 M('letra-nombre', 'Letra grande con nombre', 'Letra maciza con el nombre unido o aparte.', LETRA({ nombre: 'elisa', unible: true }), p => gLetra(p, { v: 'maciza' }));
-M('letra-hundido', 'Letra grande con nombre incrustado', 'El nombre va incrustado a ras en otro color.', [...LETRA({ nombre: 'rafael' }), chk('vertical', 'Nombre en vertical', true)], p => gLetra(p, { v: 'hundido' }));
+M('letra-hundido', 'Letra grande con nombre incrustado', 'El nombre va incrustado a ras en otro color.', [...LETRA({ nombre: 'rafael', unible: true, unidoDef: false }), chk('vertical', 'Nombre en vertical', true, { show: p => !p.unido })], p => gLetra(p, { v: 'hundido' }));
 M('letra-resina', 'Letra grande con borde (resina / brillo)', 'Letra hueca con paredes para rellenar.', LETRA({ paredes: true, nombre: 'aline', grosor: 12, unible: true }), p => gLetra(p, { v: 'resina' }));
 M('letra-textura', 'Letra grande con textura', 'Cara superior con relieve de patrón.', LETRA({ patron: 'zigzag', nombre: 'lara', unible: true }), p => gLetra(p, { v: 'textura' }));
 M('letra-fondo', 'Letra grande con fondo texturizado', 'Letra hueca con relieve en el fondo.', LETRA({ paredes: true, patron: 'panal', nombre: 'mattia', grosor: 12, unible: true }), p => gLetra(p, { v: 'fondo' }));
 M('letra-floral', 'Letra grande floral', 'Letra hueca con flores en el fondo.', LETRA({ paredes: true, patron: 'floral', nombre: 'mom', grosor: 12, unible: true }), p => gLetra(p, { v: 'fondo' }));
-M('letra-lampara', 'Lámpara de letra grande', 'Letra hueca para tira LED, difusor y nombre.', LETRA({ paredes: true, nombre: 'elisa', grosor: 30 }), p => gLetra(p, { v: 'lampara' }), { note: 'Imprime el difusor en blanco o natural; la tira LED va pegada por dentro de las paredes.' });
+M('letra-lampara', 'Lámpara de letra grande', 'Letra hueca para tira LED, difusor y nombre.', LETRA({ paredes: true, nombre: 'elisa', grosor: 30, unible: true, unidoDef: false }), p => gLetra(p, { v: 'lampara' }), { note: 'Imprime el difusor en blanco o natural; la tira LED va pegada por dentro de las paredes.' });
 
 // QR
 const QRB = (o = {}) => [shp(o.forma || 'rect', ['rect', 'arco', 'cuadrado']), num('ancho', 'Ancho', 80, 50, 160), fnt('fuente', 'Fuente del título', 'montserrat'), ...(o.titulo !== false ? [txt('titulo', 'Título', o.titulo || 'Escanéame')] : []), txt('subtitulo', 'Texto inferior', o.sub ?? ''), STAND()];
@@ -1486,6 +1502,7 @@ M('portaboli', 'Porta-bolígrafos de rejilla', 'Huecos cuadrados para rotuladore
 M('organizador-hex', 'Organizador de panal', 'Celdas hexagonales.', [cnt('cols', 'Columnas', 4, 1, 10), cnt('filas', 'Filas', 3, 1, 10), num('celda', 'Celda', 30, 12, 60), num('alto', 'Alto', 70, 20, 150), num('pared', 'Pared', 1.8, 1, 4, 0.2), num('suelo', 'Suelo', 2, 1, 5, 0.2), sel('tipo', 'Tipo', 'hex', { rect: 'Cuadrado', hex: 'Panal' })], p => gOrganizador(p));
 
 
+const COLS = { rojo: 'Rojo', rosa: 'Rosa', azul: 'Azul', celeste: 'Celeste', verde: 'Verde', oro: 'Dorado', lila: 'Lila', naranja: 'Naranja', negro: 'Negro', blanco: 'Blanco', gris: 'Gris' };
 const TERMO = (o = {}) => [{ ...shp(o.forma || 'corazon', ['corazon', 'circulo', 'cuadrado', 'ovalo', 'estrella', 'flor', 'lazo', 'nube', 'hexagono', 'bola', 'arbol', 'galleta', 'casa', 'campana']), show: p => !(p.diseno === 'imagen' && p.formaImg) }, sel('perfil', 'Perfil', o.perfil || 'cupula', { cupula: 'Cúpula acolchada', bandeja: 'Bandeja (cajita)' }), num('angulo', 'Inclinación de pared', 70, 45, 85, 1, { unit: '°', show: p => p.perfil === 'bandeja' }),
   num('tam', 'Tamaño', o.tam || 70, 30, 150), sel('diseno', 'Diseño', o.diseno || 'texto', { texto: 'Texto', imagen: 'Imagen', copo: 'Copo de nieve', patron: 'Patrón', ninguno: 'Liso' }),
   area('texto', 'Texto', o.texto ?? 'Feliz\nNavidad', { show: p => p.diseno === 'texto' }), fnt('fuente', 'Fuente', o.fuente || 'pacifico', { show: p => p.diseno === 'texto' }),
@@ -1506,7 +1523,10 @@ const TERMO = (o = {}) => [{ ...shp(o.forma || 'corazon', ['corazon', 'circulo',
   sel('cierre', 'Cierre', 'rosca', { rosca: 'Rosca arriba + clip abajo', remaches: 'Remaches a presión', pivotes: 'Pivotes pequeños', no: 'Ninguno' }, { show: p => p.malla && p.trasera !== 'no' }),
   num('holgRem', 'Ajuste del remache (más = más suelto)', 0.1, 0, 0.3, 0.02, { show: p => p.malla && p.trasera !== 'no' && p.cierre === 'remaches' }),
   num('holgRosca', 'Holgura de la rosca', 0.35, 0.15, 0.8, 0.05, { show: p => p.malla && p.trasera !== 'no' && p.cierre === 'rosca' }),
-  num('holgCanal', 'Holgura del hueco de la boquilla en el molde', 1.5, 0.5, 4, 0.25, { show: p => p.malla && p.trasera !== 'no' && p.cierre === 'rosca' })];
+  num('holgCanal', 'Holgura del hueco de la boquilla en el molde', 1.5, 0.5, 4, 0.25, { show: p => p.malla && p.trasera !== 'no' && p.cierre === 'rosca' }),
+  sel('disenoTras', 'Dibujo en la malla trasera', 'no', { no: 'Ninguno (liso)', texto: 'Un texto' }, { show: p => p.malla && p.trasera !== 'no' }),
+  area('textoTras', 'Texto de la trasera', 'Con cariño', { show: p => p.malla && p.trasera !== 'no' && p.disenoTras === 'texto' }),
+  sel('colMalla', 'Color de las mallas', 'rojo', COLS, { show: p => p.malla }), sel('colCierre', 'Color de la tuerca y el clip', 'auto', { auto: 'Por defecto', ...COLS }, { show: p => p.malla && p.trasera !== 'no' }), sel('colMoldes', 'Color de los moldes', 'auto', { auto: 'Por defecto', ...COLS })];
 M('termo', 'Generador de termoformado', 'Cualquier forma, en cúpula acolchada o en bandeja, con texto, imagen o copo.', TERMO({ texto: 'Mamá', forma: 'corazon', eva: 1, anilla: true }), p => gTermo(p));
 M('termo-nav', 'Molde de termoformado navideño', 'Bolsita de malla de dos caras con mensaje de Navidad, y sus moldes.', TERMO({ texto: 'Feliz\nNavidad', forma: 'corazon', eva: 1, anilla: true }), p => gTermo(p));
 M('termo-copo', 'Molde de termoformado: copo', 'Bolsita de malla con un copo de nieve, y sus moldes.', TERMO({ forma: 'flor', diseno: 'copo', texto: '', eva: 1, anilla: true }), p => gTermo(p));
