@@ -88,26 +88,16 @@ def main():
             const z = await __T3D.Engine.zip({ parts: res.parts, title: m.name, base: 'abre-gen', readme: 'x {STL}' }); return { size: z.blob.size, joined: z.joined, parts: res.parts.map(p => p.name) }; }""")
         print('descarga abre-gen:', z)
         if not z['joined']: fails.append(('zip abre-gen', z))
-        # opciones que no son las de por defecto: texto en la trasera, colores por parte, nombre unido en letra incrustada y lámpara, y un 3MF por placa
+        # nombre unido en letra incrustada y lámpara (no es lo de por defecto)
         extra = page.evaluate("""async () => { const E = __T3D.Engine, out = [];
-          const casos = [['termo', { disenoTras: 'texto', textoTras: 'Con cariño', colMalla: 'azul', colCierre: 'negro', colMoldes: 'gris' }], ['termo', { disenoTras: 'texto', textoTras: 'Hola', disenoMalla: 'malla', cierre: 'remaches' }],
-            ['termo', { paredMolde: 7, sueloCav: 2, holgEscalon: 2 }], ['letra-hundido', { unido: true }], ['letra-lampara', { unido: true }], ['letra-lampara', { unido: true, zNombre: 0 }]];
-          for (const [id, ov] of casos) { const m = CAT.MODELS[id]; const v = { ...__T3D.defaults(m), ...ov };
+          for (const [id, ov] of [['letra-hundido', { unido: true }], ['letra-lampara', { unido: true }], ['letra-lampara', { unido: true, zNombre: 0 }]]) { const m = CAT.MODELS[id]; const v = { ...__T3D.defaults(m), ...ov };
             try { const res = await E.gen(m, v); const chk = await E.run('check', null, null, { parts: res.parts.map(p => ({ name: p.name, mesh: { pos: p.mesh.pos, idx: p.mesh.idx } })) });
-              out.push({ id, ov: JSON.stringify(ov), parts: res.parts.map(p => p.name), plates: [...new Set(res.parts.map(p => p.plate).filter(Boolean))], bad: chk.filter(c => c.ok === false).map(c => c.name + ': ' + c.status) });
+              out.push({ id, ov: JSON.stringify(ov), parts: res.parts.map(p => p.name), bad: chk.filter(c => c.ok === false).map(c => c.name + ': ' + c.status) });
             } catch (e) { out.push({ id, ov: JSON.stringify(ov), error: String(e.message || e) }); } }
-          const m = CAT.MODELS['termo'], res = await E.gen(m, __T3D.defaults(m));
-          const z = await E.zip({ parts: res.parts, title: m.name, base: 'termo', readme: 'x {STL}' });
-          const zz = await JSZip.loadAsync(z.blob); out.push({ id: 'zip-placas', files: Object.keys(zz.files).filter(f => f.endsWith('.3mf')) });
           return out; }""")
         for r in extra:
-            print('extra:', json.dumps(r, ensure_ascii=False)[:400])
+            print('extra:', json.dumps(r, ensure_ascii=False)[:300])
             if r.get('error') or r.get('bad'): fails.append(('extra ' + r['id'], r))
-        trasera = [r for r in extra if r['id'] == 'termo' and 'disenoTras' in r['ov']]
-        for r in trasera:
-            if 'Malla trasera: texto' not in r.get('parts', []): fails.append(('termo sin texto trasero', r))
-        zp = [r for r in extra if r['id'] == 'zip-placas'][0]
-        if len([f for f in zp['files'] if f.startswith('placas/')]) < 4: fails.append(('zip sin placas', zp))
         if a.shots:
             for mid in ['abre-gen', 'abre-nfc', 'll-abrelatas']:
                 page.goto(url + '#m-' + mid); page.wait_for_function("() => document.querySelector('#busy').classList.contains('hidden') && document.querySelector('#dims').textContent !== '—'", timeout=60000)
