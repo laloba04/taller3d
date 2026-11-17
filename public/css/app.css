@@ -90,7 +90,7 @@ button{font:inherit;cursor:pointer}
 .toolprev svg,.toolprev canvas{max-width:100%;max-height:70vh}
 .btnrow{display:flex;gap:8px;flex-wrap:wrap}.btnrow .primary{margin-top:4px}
 .empty{color:var(--muted);text-align:center;padding:40px}
-@media (max-width:860px){.toolbox{grid-template-columns:1fr}.mainnav{margin-left:0}.top{flex-wrap:wrap}}
+@media (max-width:860px){.toolbox{grid-template-columns:1fr}.mainnav{margin-left:0;flex:1 1 100%;flex-wrap:wrap}.mainnav a{white-space:nowrap}.top{flex-wrap:wrap}}
 /* cosas a mejorar */
 .mej{max-width:760px;margin:0 auto;padding:0 16px 30px}
 .mej-form{display:flex;flex-direction:column;gap:2px}
