@@ -90,7 +90,7 @@ def main():
         if not z['joined']: fails.append(('zip abre-gen', z))
         # nombre unido en letra incrustada y lámpara (no es lo de por defecto)
         extra = page.evaluate("""async () => { const E = __T3D.Engine, out = [];
-          for (const [id, ov] of [['letra-hundido', { unido: true }], ['letra-lampara', { unido: true }], ['letra-lampara', { unido: true, zNombre: 0 }]]) { const m = CAT.MODELS[id]; const v = { ...__T3D.defaults(m), ...ov };
+          for (const [id, ov] of [['letra-hundido', { unido: true }], ['letra-lampara', { unido: true }], ['letra-lampara', { unido: true, zNombre: 0 }], ['pet-hueso', { detras: 'Si me pierdo', detras2: '600 000 000' }], ['pet-huella', { detras: 'Toby' }], ['pet-ovalada', { detras2: '600 000 000' }], ['pet-forma', { detras: 'Luigi' }]]) { const m = CAT.MODELS[id]; const v = { ...__T3D.defaults(m), ...ov };
             try { const res = await E.gen(m, v); const chk = await E.run('check', null, null, { parts: res.parts.map(p => ({ name: p.name, mesh: { pos: p.mesh.pos, idx: p.mesh.idx } })) });
               out.push({ id, ov: JSON.stringify(ov), parts: res.parts.map(p => p.name), bad: chk.filter(c => c.ok === false).map(c => c.name + ': ' + c.status) });
             } catch (e) { out.push({ id, ov: JSON.stringify(ov), error: String(e.message || e) }); } }
@@ -98,6 +98,7 @@ def main():
         for r in extra:
             print('extra:', json.dumps(r, ensure_ascii=False)[:300])
             if r.get('error') or r.get('bad'): fails.append(('extra ' + r['id'], r))
+            elif r['id'].startswith('pet-') and 'Texto de atrás' not in ' '.join(r['parts']): fails.append(('extra ' + r['id'] + ' sin texto de atrás', r))
         if a.shots:
             for mid in ['abre-gen', 'abre-nfc', 'll-abrelatas']:
                 page.goto(url + '#m-' + mid); page.wait_for_function("() => document.querySelector('#busy').classList.contains('hidden') && document.querySelector('#dims').textContent !== '—'", timeout=60000)
