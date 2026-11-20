@@ -28,10 +28,13 @@ const FONTS = [
   /* buenas para texto pequeño (placas, teléfonos): huecos de 0,5 mm o más y trazos de 0,6 mm o más a 3–4 mm de alto */
   { id: 'russo', name: 'Russo One (letra pequeña)', fam: 'Russo One', w: 400 },
   { id: 'oswald', name: 'Oswald (estrecha, letra pequeña)', fam: 'Oswald', w: 700 },
-  { id: 'bungee', name: 'Bungee (letra pequeña)', fam: 'Bungee', w: 400 },
+  { id: 'bungee', name: 'Bungee (letra muy pequeña)', fam: 'Bungee', w: 400 },
   { id: 'lilita', name: 'Lilita One (letra pequeña)', fam: 'Lilita One', w: 400 },
   { id: 'archivo', name: 'Archivo Black (letra pequeña)', fam: 'Archivo Black', w: 400 },
   { id: 'nunito', name: 'Nunito Black (redonda, letra pequeña)', fam: 'Nunito', w: 900 },
+  /* las que mejor aguantan con letra MUY pequeña (unos 2,5 mm de alto) */
+  { id: 'ubuntu', name: 'Ubuntu (letra muy pequeña)', fam: 'Ubuntu', w: 700 },
+  { id: 'overpass', name: 'Overpass Black (letra muy pequeña)', fam: 'Overpass', w: 900 },
 ];
 const EMOJI = { id: 'emoji', fam: null, w: 400 };
 function font(id) { return id === 'emoji' ? EMOJI : (FONTS.find(f => f.id === id) || FONTS[0]); }
