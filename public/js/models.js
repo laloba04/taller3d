@@ -120,9 +120,10 @@ function gPlaca(p, o = {}) {
   else if (p.detras || p.detras2) {
     /* texto por detrás: incrustado a ras en las primeras capas (esa cara se imprime contra la cama, en espejo) */
     const tb = [p.detras, p.detras2].filter(Boolean); const zb = 0.6;
-    const atras = s => and(F.text(tb, f1, s, cx, cy, { mirror: true }), dentro);
+    /* engrosado 0,2 mm: a ras en la primera capa, un trazo más fino que la boquilla no sale (y la letra pequeña perdía las íes) */
+    const atras = s => and(F.text(tb, f1, s, cx, cy, { mirror: true, bold: 0.2 }), dentro);
     let sb = fitSize(tb, f1, bw, bh), Tb = atras(sb);
-    for (let i = 0; i < 14; i++) { const n = K.count(F.text(tb, f1, sb, cx, cy, { mirror: true })); if (!n || n - K.count(Tb) <= n * 0.002) break; sb *= 0.93; Tb = atras(sb); }
+    for (let i = 0; i < 14; i++) { const n = K.count(F.text(tb, f1, sb, cx, cy, { mirror: true, bold: 0.2 })); if (!n || n - K.count(Tb) <= n * 0.002) break; sb *= 0.93; Tb = atras(sb); }
     layers.push(L('Base: cara de atrás', sub(base, Tb), 0, zb, o.c1 || C.azul), L('Texto de atrás', Tb, 0, zb, o.c2 || C.blanco), L('Base', base, zb, hb, o.c1 || C.azul));
   }
   else layers.push(L('Base', base, 0, hb, o.c1 || C.azul));
@@ -1262,7 +1263,7 @@ function rosaLinea(F, cx, cy, R, lw) {
 }
 function gRosaNombre(p) {
   const f = font(p.fuente); const t = lines(p.texto, 'mamá'); const d = tdim(t, f, p.ancho); const R = Math.max(d.h * 0.85, 6); const F = frame(p.ancho + 2 * R + 30, Math.max(d.h, 2 * R) + 18);
-  const x0 = -(p.ancho + 2 * R + 4) / 2 + R; const rose = rosaLinea(F, x0, 0, R, Math.max(1, R * 0.12)); const T = F.text(t, f, d.s, x0 + R + 3 + p.ancho / 2, 0, { bold: 0.3 });
+  const x0 = -(p.ancho + 2 * R + 4) / 2 + R; const rose = rosaLinea(F, x0, 0, R, Math.max(1, R * 0.12)); const T = F.text(t, f, d.s, x0 + R + 3 + p.ancho / 2, 0, { bold: 0.2 });
   const tb = bbox(F, T); const tail = F.draw(c => { c.lineWidth = 1.3; c.beginPath(); c.moveTo(tb.x1 - 1.5, tb.y1 - d.h * 0.25); c.quadraticCurveTo(tb.x1 + 5, tb.y1 - d.h * 0.1, tb.x1 + 10, tb.y1 - d.h * 0.45); c.stroke(); });
   const all = or(rose, T, tail); let base = close(F, dilate(F, all, p.borde), 1.5); const h = holeTab(F, base, p.agujero, p.dAg, undefined, undefined, p.movAg); base = h.base;
   return { F, layers: [L('Base', base, 0, 2.4, C.blanco), L('Rosa y nombre', h.clear ? sub(all, h.clear) : all, 2.4, 3.4, C.rosa)] };

@@ -153,7 +153,7 @@ function buildForm(m) {
   for (const p of m.params) {
     const box = el('div', { class: 'f' + (p.type === 'chk' ? ' chk' : ''), 'data-k': p.k });
     const set = (x) => { v[p.k] = numVal(p, x); refreshVisibility(m); schedule(); };
-    if (p.type === 'text') { const i = el('input', { type: 'text', value: v[p.k] ?? '' }); i.addEventListener('input', () => set(i.value)); box.append(el('label', {}, p.label), i);
+    if (p.type === 'text') { const i = el('input', { type: 'text', value: v[p.k] ?? '' }); i.addEventListener('input', () => set(i.value)); if (/^detras/.test(p.k)) i.addEventListener('focus', () => fit('atras')); box.append(el('label', {}, p.label), i);
       /* campos de icono/emoji: botonera con emojis para elegir sin teclado (en el campo de icono sustituye; en un texto se inserta donde está el cursor) */
       if (/icono|emoji/i.test(p.label + ' ' + p.k)) { const solo = p.k === 'icono', lista = p.k === 'iconos'; const bar = el('div', { class: 'emojis' });
         for (const e of EMOJIS) { const b = el('button', { type: 'button', title: 'Usar ' + e }, e);
@@ -229,12 +229,12 @@ function initViewer() {
   if (renderer) return;
   const box = $('#viewer'); renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); renderer.setPixelRatio(Math.min(2, window.devicePixelRatio)); box.append(renderer.domElement);
   scene = new THREE.Scene(); camera = new THREE.PerspectiveCamera(35, 1, 1, 5000); camera.up.set(0, 0, 1);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.75)); const d1 = new THREE.DirectionalLight(0xffffff, 0.75); d1.position.set(80, -120, 200); scene.add(d1); const d2 = new THREE.DirectionalLight(0xffffff, 0.3); d2.position.set(-150, 100, 80); scene.add(d2);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 0.75)); const d1 = new THREE.DirectionalLight(0xffffff, 0.75); d1.position.set(80, -120, 200); scene.add(d1); const d2 = new THREE.DirectionalLight(0xffffff, 0.3); d2.position.set(-150, 100, 80); scene.add(d2); const d3 = new THREE.DirectionalLight(0xffffff, 0.55); d3.position.set(40, 60, -200); scene.add(d3);
   grid = new THREE.GridHelper(400, 40, 0xb8c2c8, 0xcfd6da); grid.rotation.x = Math.PI / 2; scene.add(grid);
   group = new THREE.Group(); scene.add(group);
   controls = new THREE.OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
   new ResizeObserver(resize).observe(box); resize();
-  $('#btn-top').onclick = () => fit(true); $('#btn-iso').onclick = () => fit(false);
+  $('#btn-top').onclick = () => fit(true); $('#btn-iso').onclick = () => fit(false); $('#btn-atras').onclick = () => fit('atras');
   $('#btn-mover').onclick = () => setMover(!mover);
   $('#btn-recolocar').onclick = () => { const k = state.model && state.model.id; if (k) delete state.offsets[k]; aplicarOffsets(); };
   const cv = renderer.domElement;
@@ -275,7 +275,7 @@ function actualizaDims() {
   $('#dims').textContent = isFinite(s.x) && r ? `${s.x.toFixed(1)} × ${s.y.toFixed(1)} × ${s.z.toFixed(1)} mm · ${r.parts.reduce((a, p) => a + p.mesh.idx.length / 3, 0).toLocaleString('es-ES')} triángulos` : '—';
 }
 function resize() { if (!renderer) return; const b = $('#viewer'); const w = b.clientWidth, h = b.clientHeight || 1; renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
-function loop() { raf = requestAnimationFrame(loop); controls.update(); renderer.render(scene, camera); }
+function loop() { raf = requestAnimationFrame(loop); controls.update(); grid.visible = camera.position.z > 0; renderer.render(scene, camera); }
 function stopViewer() { cancelAnimationFrame(raf); raf = 0; }
 function showMeshes(parts) {
   for (const m of meshes) { group.remove(m); m.geometry.dispose(); m.material.dispose(); } meshes = [];
@@ -287,7 +287,8 @@ function showMeshes(parts) {
 function fit(top) {
   const bb = new THREE.Box3().setFromObject(group); if (bb.isEmpty()) return; const c = bb.getCenter(new THREE.Vector3()); const s = bb.getSize(new THREE.Vector3()); const r = Math.max(s.x, s.y, s.z * 1.5, 20);
   const dist = r / Math.tan(camera.fov * Math.PI / 360) * 0.75;
-  if (top) camera.position.set(c.x, c.y - 0.001, c.z + dist); else camera.position.set(c.x + dist * 0.35, c.y - dist * 0.75, c.z + dist * 0.6);
+  /* 'atras': desde abajo, como si se le diera la vuelta a la pieza (el texto de atrás se lee al derecho) */
+  if (top === 'atras') camera.position.set(c.x, c.y + 0.001, c.z - dist); else if (top) camera.position.set(c.x, c.y - 0.001, c.z + dist); else camera.position.set(c.x + dist * 0.35, c.y - dist * 0.75, c.z + dist * 0.6);
   controls.target.copy(c); camera.near = dist / 100; camera.far = dist * 20; camera.updateProjectionMatrix(); controls.update();
 }
 function openModel(id) {
