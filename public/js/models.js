@@ -118,13 +118,14 @@ function gPlaca(p, o = {}) {
   const hb = p.hBase, hr = p.hRel; const layers = [];
   if (p.nfc) { const pocket = F.disk(0, 0, p.dNfc / 2 + 0.3); layers.push(L('Base', base, 0, 0.8, o.c1 || C.azul), L('Hueco NFC (pausa aquí)', sub(base, pocket), 0.8, 0.8 + p.eNfc, o.c1 || C.azul), L('Tapa', base, 0.8 + p.eNfc, Math.max(hb, 1.8 + p.eNfc), o.c1 || C.azul)); }
   else if (p.detras || p.detras2) {
-    /* texto por detrás: incrustado a ras en las primeras capas (esa cara se imprime contra la cama, en espejo) */
-    const tb = [p.detras, p.detras2].filter(Boolean); const zb = 0.6;
+    /* texto por detrás: HUNDIDO desde la cara de la cama (en espejo), con el fondo de las letras de otro color.
+       En relieve no se puede: quedaría colgando contra la cama. */
+    const tb = [p.detras, p.detras2].filter(Boolean); const zb = Math.min(0.8, hb - 0.8), zc = zb + 0.4;
     /* engrosado 0,2 mm: a ras en la primera capa, un trazo más fino que la boquilla no sale (y la letra pequeña perdía las íes) */
     const atras = s => and(F.text(tb, f1, s, cx, cy, { mirror: true, bold: 0.2 }), dentro);
     let sb = fitSize(tb, f1, bw, bh), Tb = atras(sb);
     for (let i = 0; i < 14; i++) { const n = K.count(F.text(tb, f1, sb, cx, cy, { mirror: true, bold: 0.2 })); if (!n || n - K.count(Tb) <= n * 0.002) break; sb *= 0.93; Tb = atras(sb); }
-    layers.push(L('Base: cara de atrás', sub(base, Tb), 0, zb, o.c1 || C.azul), L('Texto de atrás', Tb, 0, zb, o.c2 || C.blanco), L('Base', base, zb, hb, o.c1 || C.azul));
+    layers.push(L('Base: cara de atrás', sub(base, Tb), 0, zc, o.c1 || C.azul), L('Texto de atrás (fondo)', Tb, zb, zc, o.c2 || C.blanco), L('Base', base, zc, hb, o.c1 || C.azul));
   }
   else layers.push(L('Base', base, 0, hb, o.c1 || C.azul));
   const top = layers[layers.length - 1].z1;
