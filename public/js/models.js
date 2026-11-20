@@ -109,8 +109,8 @@ function gPlaca(p, o = {}) {
     if (p.conImagen && p.img) { const ih = bh * 0.55; const sz = imgFit(p.img, bw, ih); T = or(T, IM(F, p, cx, cy - bh / 2 + sz.h / 2, sz.w, sz.h)); const rest = bh - sz.h - 1.5; sI = Math.min(s, bw / m1.w, rest / (m1.h + (m2 ? gap + m2.h * k2 : 0))); }
     let y = p.conImagen && p.img ? cy - bh / 2 + bh * 0.55 + 1.5 : cy - hTot(sI) / 2;
     if (mi) { const hi = mi.h * sI * 0.9; T = or(T, F.text(ic, font('emoji'), sI * 0.9, cx, y + hi / 2)); y += hi + gap * sI; }
-    if (p.texto) { T = or(T, F.text(t1, f1, sI, cx, y + m1.h * sI / 2)); y += m1.h * sI + gap * sI; }
-    if (m2) T = or(T, F.text(t2, f2, sI * k2, cx, y + m2.h * sI * k2 / 2));
+    if (p.texto) { T = or(T, F.text(t1, f1, sI, cx, y + m1.h * sI / 2, { bold: p.gordo || 0 })); y += m1.h * sI + gap * sI; }
+    if (m2) T = or(T, F.text(t2, f2, sI * k2, cx, y + m2.h * sI * k2 / 2, { bold: p.gordo || 0 }));
     return T; };
   let T = textos(s0);
   for (let i = 0; i < 14; i++) { const n = K.count(T); if (!n || K.count(sub(T, dentro)) <= n * 0.002) break; s0 *= 0.93; T = textos(s0); }
@@ -120,11 +120,11 @@ function gPlaca(p, o = {}) {
   else if (p.detras || p.detras2) {
     /* texto por detrás: HUNDIDO desde la cara de la cama (en espejo), con el fondo de las letras de otro color.
        En relieve no se puede: quedaría colgando contra la cama. */
-    const tb = [p.detras, p.detras2].filter(Boolean); const zb = Math.min(0.8, hb - 0.8), zc = zb + 0.4;
-    /* engrosado 0,2 mm: a ras en la primera capa, un trazo más fino que la boquilla no sale (y la letra pequeña perdía las íes) */
-    const atras = s => and(F.text(tb, f1, s, cx, cy, { mirror: true, bold: 0.2 }), dentro);
+    const tb = [p.detras, p.detras2].filter(Boolean); const zb = Math.min(p.hAtras ?? 0.8, hb - 0.8), zc = zb + 0.4; const gb = p.gordoAtras ?? 0.2;
+    /* engrosado (0,2 mm por defecto): un trazo más fino que la boquilla no sale, y con letra pequeña se perdían las íes */
+    const atras = s => and(F.text(tb, f1, s, cx, cy, { mirror: true, bold: gb }), dentro);
     let sb = fitSize(tb, f1, bw, bh), Tb = atras(sb);
-    for (let i = 0; i < 14; i++) { const n = K.count(F.text(tb, f1, sb, cx, cy, { mirror: true, bold: 0.2 })); if (!n || n - K.count(Tb) <= n * 0.002) break; sb *= 0.93; Tb = atras(sb); }
+    for (let i = 0; i < 14; i++) { const n = K.count(F.text(tb, f1, sb, cx, cy, { mirror: true, bold: gb })); if (!n || n - K.count(Tb) <= n * 0.002) break; sb *= 0.93; Tb = atras(sb); }
     layers.push(L('Base: cara de atrás', sub(base, Tb), 0, zc, o.c1 || C.azul), L('Texto de atrás (fondo)', Tb, zb, zc, o.c2 || C.blanco), L('Base', base, zc, hb, o.c1 || C.azul));
   }
   else layers.push(L('Base', base, 0, hb, o.c1 || C.azul));
@@ -1427,7 +1427,7 @@ M('nav-galleta', 'Adornos de galleta navideños', 'Muñeco de jengibre, estrella
 M('nav-medallon', 'Bola de Navidad con nombre', 'Adorno plano con nombre y año.', PLACA({ def: 'bola', ancho: 60, alto: 66, texto: 'Noa', texto2: '2026', icono: '⭐', formas: ['bola', 'estrella', 'arbol', 'campana', 'casa', 'copo'] }), p => gPlaca(p, { c1: C.rojo }));
 
 // Mascotas
-const PET = (forma, ancho, alto, extra = {}) => [...PLACA({ forma: true, ancho, alto, texto: extra.texto || 'Luigi', texto2: '600 000 000', fuente: 'luckiest', borde: 1.2, ...extra }), num('escala2', 'Tamaño 2ª línea', 0.4, 0.25, 0.8, 0.05, { unit: '×' }), txt('detras', 'Texto de atrás', ''), txt('detras2', '2ª línea de atrás', '')];
+const PET = (forma, ancho, alto, extra = {}) => [...PLACA({ forma: true, ancho, alto, texto: extra.texto || 'Luigi', texto2: '600 000 000', fuente: 'luckiest', borde: 1.2, ...extra }), num('escala2', 'Tamaño 2ª línea', 0.4, 0.25, 0.8, 0.05, { unit: '×' }), num('gordo', 'Grosor de las letras', 0, 0, 0.8, 0.1), txt('detras', 'Texto de atrás', ''), txt('detras2', '2ª línea de atrás', ''), num('hAtras', 'Hondo del texto de atrás', 0.8, 0.4, 2, 0.2, { show: p => !!(p.detras || p.detras2) }), num('gordoAtras', 'Grosor de las letras de atrás', 0.2, 0, 0.8, 0.1, { show: p => !!(p.detras || p.detras2) })];
 M('pet-ovalada', 'Placa ovalada', 'Placa clásica con nombre y teléfono.', PET('ovalo', 42, 28), p => gPlaca(p, { forma: 'ovalo', c1: C.lila }));
 M('pet-ondulada', 'Placa ovalada ondulada', 'Con el borde ondulado.', PET('ovalo_ondulado', 44, 30, { texto: 'Cacau' }), p => gPlaca(p, { forma: 'ovalo_ondulado', c1: C.lila }));
 M('pet-hueso', 'Placa hueso', 'La de toda la vida para perros.', PET('hueso', 48, 26, { texto: 'Feijão', agujero: 'izq' }), p => gPlaca(p, { forma: 'hueso', c1: C.lila }));
